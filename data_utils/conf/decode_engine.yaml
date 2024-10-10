@@ -1,0 +1,90 @@
+cmvn_file: conf/unified_conformer/global_cmvn
+#dataset_conf:
+data_conf:
+  batch_conf:
+    batch_size: 1
+    batch_type: static
+  fbank_conf:
+    dither: 0.0
+    frame_length: 25
+    frame_shift: 10
+    num_mel_bins: 80
+  filter_conf:
+    max_length: 102400 #40960
+    min_length: 0
+    token_max_length: 102400 #200
+    token_min_length: 0 #1
+  resample_conf:
+    resample_rate: 16000
+  shuffle: False
+  shuffle_conf:
+    shuffle_size: 1500
+  sort: False
+  sort_conf:
+    sort_size: 500
+  spec_aug: False
+  spec_aug_conf:
+    max_f: 10
+    max_t: 50
+    num_f_mask: 2
+    num_t_mask: 2
+  speed_perturb: False
+decoder: transformer
+decoder_conf:
+  attention_heads: 4
+  dropout_rate: 0.1
+  linear_units: 2048
+  num_blocks: 6
+  positional_dropout_rate: 0.1
+  self_attention_dropout_rate: 0.0
+  src_attention_dropout_rate: 0.0
+encoder: conformer
+encoder_conf:
+  activation_type: swish
+  attention_dropout_rate: 0.0
+  attention_heads: 4
+  causal: true
+  cnn_module_kernel: 15
+  cnn_module_norm: layer_norm
+  dropout_rate: 0.1
+  input_layer: conv2d
+  linear_units: 2048
+  normalize_before: true
+  num_blocks: 12
+  output_size: 256
+  pos_enc_layer_type: rel_pos
+  positional_dropout_rate: 0.1
+  selfattention_layer_type: rel_selfattn
+  use_cnn_module: true
+  use_dynamic_chunk: true
+  use_dynamic_left_chunk: false
+input_dim: 80
+is_json_cmvn: true
+log_interval: 100
+model_conf:
+  ctc_weight: 0.5
+  length_normalized_loss: false
+  lsm_weight: 0.1
+#output_dim: 4233
+output_dim: 11008
+raw_wav: true
+
+reverse_weight: 0
+
+engine_sample_rate_hertz: 16000
+engine_max_decoders: 20
+engine_max_inactivity_secs: 3
+engine_vad_aggressiveness: 2
+
+#model_path: conf/unified_conformer_tel/19.pt
+model_path: conf/unified_conformer/final.pt
+dict_path: conf/unified_conformer/lang_char.txt 
+
+beam_size: 10
+mode: ctc_greedy_search
+decoding_chunk_size: 16 #11
+num_decoding_left_chunks: -1
+#override_config:
+#penalty: 
+save_wave: True
+audio_save_path: /data/kzx/datasets/server_collected_wav

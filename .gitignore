@@ -1,0 +1,11 @@
+.ipynb_checkpoints
+dataset
+*.wav
+*.npy
+__pycache__
+*.mp4
+checkpoint
+syncnet_checkpoint
+*.jpg
+data_utils/encoder.onnx
+__MACOSX
