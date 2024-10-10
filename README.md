@@ -53,7 +53,7 @@ Prepare your video, 3~5min is good. Make sure that every frame of the video has 
 
 First of all, we need to extract audio feature.I'm using 2 different extractor from wenet and hubert, thank them for their great work.
 
-首先我们需要提取音频特征，我用了两个不同的特征提取起，分别是wenet和hubert，感谢他们。
+首先我们需要提取音频特征，我用了两个不同的特征提取器，分别是wenet和hubert，感谢他们。
 
 When you using wenet, you neet to ensure that your video frame rate is 20, and for hubert,your video frame rate should be 25.
 
