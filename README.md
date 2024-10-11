@@ -9,6 +9,7 @@
 </p>
 
 A Ultralight Digital Human model can run on mobile devices in real time!!!
+
 一个能在移动设备上实时运行的数字人模型,据我所知，这应该是第一个开源的如此轻量级的数字人模型。
 
 Lets see the demo.⬇️⬇️⬇️
