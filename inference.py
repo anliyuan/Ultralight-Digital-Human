@@ -49,10 +49,13 @@ def get_audio_features(features, index):
 audio_feats = np.load(audio_feat_path)
 img_dir = os.path.join(dataset_dir, "full_body_img/")
 lms_dir = os.path.join(dataset_dir, "landmarks/")
+img_path = img_dir + str(0)+'.jpg'
+img = cv2.imread(img_path) #"D:/ai_sd_data/2.jpg"
+print("HWC=",img.shape[0],img.shape[1],img.shape[2])
 if mode=="hubert":
-    video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M','J','P', 'G'), 25, (1280, 720))
+    video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 25, (img.shape[1], img.shape[0]))
 if mode=="wenet":
-    video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M','J','P', 'G'), 20, (1280, 720))
+    video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 20, (img.shape[1],  img.shape[0]))
     
 net = Model(6, mode).cuda()
 net.load_state_dict(torch.load(checkpoint))
