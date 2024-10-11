@@ -2,6 +2,8 @@ import os
 import cv2
 import argparse
 import numpy as np
+from tqdm import tqdm
+
 
 def extract_audio(path, out_path, sample_rate=16000):
     
@@ -24,7 +26,7 @@ def extract_images(path, mode):
         raise ValueError("Using hubert,your video fps should be 25!!!")
     if mode == "wenet" and fps != 20:
         raise ValueError("Using wenet,your video fps should be 20!!!")
-        
+
     print("extracting images...")
     while True:
         ret, frame = cap.read()
@@ -32,7 +34,7 @@ def extract_images(path, mode):
             break
         cv2.imwrite(full_body_dir+"/"+str(counter)+'.jpg', frame)
         counter += 1
-        
+
 def get_audio_feature(wav_path, mode):
     
     print("extracting audio feature...")
@@ -49,7 +51,7 @@ def get_landmark(path, landmarks_dir):
     from get_landmark import Landmark
     landmark = Landmark()
     
-    for img_name in os.listdir(full_img_dir):
+    for img_name in tqdm(os.listdir(full_img_dir)):
         if not img_name.endswith(".jpg"):
             continue
         img_path = os.path.join(full_img_dir, img_name)
@@ -64,12 +66,15 @@ def get_landmark(path, landmarks_dir):
                 f.write("\n")
 
 if __name__ == "__main__":
-    
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str, help="path to video file")
     parser.add_argument('--asr', type=str, default='hubert', help="wenet or hubert")
+    parser.add_argument('--device_id', type=int, default=6, help="gpu id")
     opt = parser.parse_args()
     asr_mode = opt.asr
+    
+    print('using gpu id: {}'.format(opt.device_id))
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(opt.device_id)
 
     base_dir = os.path.dirname(opt.path)
     wav_path = os.path.join(base_dir, 'aud.wav')
@@ -81,5 +86,3 @@ if __name__ == "__main__":
     extract_images(opt.path, asr_mode)
     get_landmark(opt.path, landmarks_dir)
     get_audio_feature(wav_path, asr_mode)
-    
-    
