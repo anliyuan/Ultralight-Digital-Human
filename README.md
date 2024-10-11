@@ -3,6 +3,13 @@
 
 
 A Ultralight Digital Human model can run on mobile devices in real time!!!
+<p align="center">
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/python-3.10-aff.svg"></a>
+    <a href="https://github.com/anliyuan/Ultralight-Digital-Human/stargazers"><img src="https://img.shields.io/github/stars/anliyuan/Ultralight-Digital-Human?color=ccf"></a>
+  <br>
+    <br>
+</p>
 
 一个能在移动设备上实时运行的数字人模型
 
