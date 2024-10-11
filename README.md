@@ -1,8 +1,5 @@
 # Ultralight Digital Human
 
-
-
-A Ultralight Digital Human model can run on mobile devices in real time!!!
 <p align="center">
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/python-3.10-aff.svg"></a>
@@ -11,14 +8,12 @@ A Ultralight Digital Human model can run on mobile devices in real time!!!
     <br>
 </p>
 
-一个能在移动设备上实时运行的数字人模型
-
-据我所知，这应该是第一个开源的如此轻量级的数字人模型。
+A Ultralight Digital Human model can run on mobile devices in real time!!!
+一个能在移动设备上实时运行的数字人模型,据我所知，这应该是第一个开源的如此轻量级的数字人模型。
 
 Lets see the demo.⬇️⬇️⬇️
 
 先来看个demo⬇️⬇️⬇️
-
 
 ![DigitalHuman](https://github.com/user-attachments/assets/9d0b37ee-2076-4b4f-93ba-eb939a9fb427)
 
@@ -125,7 +120,7 @@ To merge the audio and the video, run
 ffmpeg -i xxx.mp4 -i your_audio.wav -c:v libx264 -c:a aac result_test.mp4
 ```
 
-Enjoy🎉🎉🎉
+## Enjoy🎉🎉🎉
 
 这个模型是支持流式推理的，但是代码还没有完善，之后我会提上来。
 
@@ -142,7 +137,7 @@ If you think this repo is useful to you, please give me a star.
 BUY ME A CUP OF COFFE⬇️⬇️⬇️
 <table>
   <tr>
-    <td><img src="demo/15bef5a6d08434c0d70f0ba39bb14fc0.JPG" width="200"/></td>
-    <td><img src="demo/36d2896f13bee68247de6ccc89b17a94.JPG" width="200"/></td>
+    <td><img src="demo/15bef5a6d08434c0d70f0ba39bb14fc0.JPG" width="180"/></td>
+    <td><img src="demo/36d2896f13bee68247de6ccc89b17a94.JPG" width="180"/></td>
   </tr>
 </table>
