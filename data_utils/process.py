@@ -69,11 +69,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str, help="path to video file")
     parser.add_argument('--asr', type=str, default='hubert', help="wenet or hubert")
-    parser.add_argument('--device_id', type=int, default=6, help="gpu id")
+    parser.add_argument('--device_id', type=int, default=0, help="gpu id")
     opt = parser.parse_args()
     asr_mode = opt.asr
     
-    print('using gpu id: {}'.format(opt.device_id))
+    print('Using gpu id: {}'.format(opt.device_id))
     os.environ['CUDA_VISIBLE_DEVICES'] = str(opt.device_id)
 
     base_dir = os.path.dirname(opt.path)
