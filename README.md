@@ -85,14 +85,23 @@ After the preprocessing step, you can start training the model.
 
 上面步骤结束后，就可以开始训练模型了。
 
+Train a syncnet first for better results.
+
+先训练一个syncnet，效果会更好。
+
 ``` bash
 cd ..
-python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert --see_res
+python syncnet.py --save_dir ./syncnet_ckpt/ --dataset_dir ./data_dir/ --asr hubert
 ```
 
-by the way, you can use syncnet just like wav2lip by running syncnet.py before train, check the script.
+Then find a best one（low loss） to train digital human model.
 
-也可以使用syncnet，跟wav2lip一样，我试了一下，用了syncnet以后，效果会有一些提升，但并不大，感兴趣的同学可以试一下。
+然后找一个loss最低的checkpoint来训练数字人模型。
+
+``` bash
+cd ..
+python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert --use_syncnet --syncnet_checkpoint syncnet_ckpt
+```
 
 ## inference
 

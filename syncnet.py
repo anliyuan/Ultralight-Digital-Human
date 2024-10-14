@@ -38,8 +38,8 @@ class Dataset(object):
 
     def get_audio_features(self, features, index):
         
-        left = index - 4
-        right = index + 4
+        left = index - 8
+        right = index + 8
         pad_left = 0
         pad_right = 0
         if left < 0:
@@ -96,7 +96,7 @@ class Dataset(object):
         # asd
         
         # audio_feat = audio_feat.reshape(128,16,32)
-        audio_feat = audio_feat.reshape(16,32,32)
+        audio_feat = audio_feat.reshape(32,32,32)
         y = torch.ones(1).float()
         
         return img_real_T, audio_feat, y
@@ -173,7 +173,7 @@ class SyncNet_color(nn.Module):
         p1 = 128
         p2 = (1, 2)
         if mode == "hubert":
-            p1 = 16
+            p1 = 32
             p2 = (2, 2)
         
         self.audio_encoder = nn.Sequential(

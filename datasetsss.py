@@ -39,8 +39,8 @@ class MyDataset(Dataset):
         return self.audio_feats.shape[0]-1
     
     def get_audio_features(self, features, index):
-        left = index - 4
-        right = index + 4
+        left = index - 8
+        right = index + 8
         pad_left = 0
         pad_right = 0
         if left < 0:
@@ -134,9 +134,9 @@ class MyDataset(Dataset):
         audio_feat = self.get_audio_features(self.audio_feats, idx) 
         
         if self.mode == "wenet":
-            audio_feat = audio_feat.reshape(128,16,32)
+            audio_feat = audio_feat.reshape(256,16,32)
         if self.mode == "hubert":
-            audio_feat = audio_feat.reshape(16,32,32)
+            audio_feat = audio_feat.reshape(32,32,32)
         
         return img_concat_T, img_real_T, audio_feat
     
