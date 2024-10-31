@@ -97,9 +97,9 @@ python train_render_model.py --dataset_dir ./datasets/ --save_dir ./checkpoint/r
 
 ## inference
 
-Before run inference, you need to extract test audio feature(i will merge this step and inference step), run this
+Before run inference, you need to extract test audio feature(i will merge this step and inference step), run this(The following is no longer necessary and has been merged with inference)
 
-在推理之前，需要先提取测试音频的特征（之后会把这步和推理合并到一起去），运行
+在推理之前，需要先提取测试音频的特征（之后会把这步和推理合并到一起去），运行（以下已不需要，已与推理合并）
 
 ``` bash
 python data_utils/hubert.py --wav your_test_audio.wav  # when using hubert
@@ -113,7 +113,7 @@ then you get your_test_audio_hu.npy or your_test_audio_wenet.npy
 
 then run
 ``` bash
-python inference.py --asr hubert --dataset ./your_data_dir/ --audio_feat your_test_audio_hu.npy --save_path xxx.mp4 --checkpoint your_trained_ckpt.pth
+python inference.py --asr hubert --dataset ./your_data_dir/ --wav your_test_audio_hu.wav --save_path xxx.mp4 --checkpoint your_trained_ckpt.pth
 ```
 
 To merge the audio and the video, run
@@ -137,9 +137,9 @@ If you think this repo is useful to you, please give me a star.
 如果你觉的这个repo对你有用的话，记得给我点个star
 
 BUY ME A CUP OF COFFE⬇️⬇️⬇️
-<table>
+<!--<table>
   <tr>
     <td><img src="demo/15bef5a6d08434c0d70f0ba39bb14fc0.JPG" width="180"/></td>
     <td><img src="demo/36d2896f13bee68247de6ccc89b17a94.JPG" width="180"/></td>
   </tr>
-</table>
+</table>-->
