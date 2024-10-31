@@ -32,12 +32,7 @@ conda create -n dh python=3.10
 conda activate dh
 conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
 conda install mkl=2024.0
-pip install opencv-python
-pip install transformers
-pip install numpy==1.23.5
-pip install soundfile
-pip install librosa
-pip install onnxruntime
+pip install -r requirements.txt
 ```
 
 I only ran on pytorch==1.13.1, Other versions should also work.
@@ -90,8 +85,7 @@ Train a syncnet first for better results.
 先训练一个syncnet，效果会更好。
 
 ``` bash
-cd ..
-python syncnet.py --save_dir ./syncnet_ckpt/ --dataset_dir ./data_dir/ --asr hubert
+python train_syncnet_model.py --save_dir ./checkpoint/syncnet_ckpt/ --dataset_dir ./datasets/ --epochs 200 --batchsize 16 --num_workers 4 --lr 0.001 --asr hubert
 ```
 
 Then find a best one（low loss） to train digital human model.
@@ -99,15 +93,14 @@ Then find a best one（low loss） to train digital human model.
 然后找一个loss最低的checkpoint来训练数字人模型。
 
 ``` bash
-cd ..
-python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert --use_syncnet --syncnet_checkpoint syncnet_ckpt
+python train_render_model.py --dataset_dir ./datasets/ --save_dir ./checkpoint/render_ckpt/ --epochs 200 --batchsize 16 --lr 0.001 --asr hubert --use_syncnet --syncnet_checkpoint ./checkpoint/syncnet.pth
 ```
 
 ## inference
 
-Before run inference, you need to extract test audio feature(i will merge this step and inference step), run this
+Before run inference, you need to extract test audio feature(i will merge this step and inference step), run this(The following is no longer necessary and has been merged with inference)
 
-在推理之前，需要先提取测试音频的特征（之后会把这步和推理合并到一起去），运行
+在推理之前，需要先提取测试音频的特征（之后会把这步和推理合并到一起去），运行（以下已不需要，已与推理合并）
 
 ``` bash
 python data_utils/hubert.py --wav your_test_audio.wav  # when using hubert
@@ -121,7 +114,7 @@ then you get your_test_audio_hu.npy or your_test_audio_wenet.npy
 
 then run
 ``` bash
-python inference.py --asr hubert --dataset ./your_data_dir/ --audio_feat your_test_audio_hu.npy --save_path xxx.mp4 --checkpoint your_trained_ckpt.pth
+python inference.py --asr hubert --dataset ./your_data_dir/ --wav your_test_audio_hu.wav --save_path xxx.mp4 --checkpoint your_trained_ckpt.pth
 ```
 
 To merge the audio and the video, run

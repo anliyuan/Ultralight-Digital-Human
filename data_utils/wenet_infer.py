@@ -1,14 +1,17 @@
 import numpy as np
 import yaml
 import time
-from collections import defaultdict
+import argparse
+import soundfile as sf
 import torch
+import onnxruntime as ort
+
+from collections import defaultdict
 from FeaturePipeline import Feature_Pipeline
 from wenet.utils.common import (IGNORE_ID, add_sos_eos, log_add,
                                 remove_duplicates_and_blank, th_accuracy,
                                 reverse_pad_list)
 from torch.nn.utils.rnn import pad_sequence
-import onnxruntime as ort
 
 frames_stride = 67
 
@@ -469,30 +472,23 @@ def to_numpy(tensor):
 
 
 if __name__ == '__main__':
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('audio_path', type=str)
     opt = parser.parse_args()
-    
-    import time
 
     audio_path = opt.audio_path
-    
-    
+
     with open('conf/decode_engine_V4.yaml', 'r') as fin:
         configs = yaml.load(fin, Loader=yaml.FullLoader)
-    
+
     asr = ASR_Model(configs)
-    
-    
+
     # with open(audio_path, 'rb') as f:
     #     audio_byte = f.read()
     # waveform = np.frombuffer(audio_byte, dtype=np.int16)
 
-
-    import soundfile as sf
     stream, sample_rate = sf.read(audio_path) # [T*sample_rate,] float64
-    
+
     # stream = stream[:,0]
     waveform = stream.astype(np.float32)*32767
     waveform = waveform.astype(np.int16)
@@ -502,7 +498,7 @@ if __name__ == '__main__':
     wav_duration = len(waveform)/16000 #self.configs['engine_sample_rate_hertz']
     waveform = torch.from_numpy(waveform).float().unsqueeze(0)
     print("waveform shape", waveform.shape)
-    
+
     t1 = time.time()
     waveform_feat, feat_length = asr.feat_pipeline._extract_feature(waveform)
     print(waveform_feat.shape)
@@ -513,7 +509,7 @@ if __name__ == '__main__':
     # print(waveform_feat.size())
     # asd
     #assert 0==1
-        
+
     #encoder_model = F.load_as_dict("/data/kzx/work/MNN/build/MNN_Models/encoder_encoder.mnn")
     #encoder_in_chunk = encoder_model['chunk']
     #encoder_in_offset = encoder_model['offset']
