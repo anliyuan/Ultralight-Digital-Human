@@ -4,17 +4,17 @@ import cv2
 import torch
 import numpy as np
 import torch.nn as nn
+
 from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from unet import Model
+from models.unet import Model
 # from unet2 import Model
 # from unet_att import Model
 
 import time
-parser = argparse.ArgumentParser(description='Train',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+parser = argparse.ArgumentParser(description='Train',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--asr', type=str, default="hubert")
 parser.add_argument('--dataset', type=str, default="")  
 parser.add_argument('--audio_feat', type=str, default="")
@@ -47,15 +47,15 @@ def get_audio_features(features, index):
     return auds
 
 audio_feats = np.load(audio_feat_path)
-img_dir = os.path.join(dataset_dir, "full_body_img/")
-lms_dir = os.path.join(dataset_dir, "landmarks/")
+img_dir = os.path.join(dataset_dir, "full_body_img")
+lms_dir = os.path.join(dataset_dir, "landmarks")
 len_img = len(os.listdir(img_dir)) - 1
-exm_img = cv2.imread(img_dir+"0.jpg")
+exm_img = cv2.imread(os.path.join(img_dir, "0.jpg"))
 h, w = exm_img.shape[:2]
 
-if mode=="hubert":
+if mode == "hubert":
     video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M','J','P', 'G'), 25, (w, h))
-if mode=="wenet":
+if mode == "wenet":
     video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M','J','P', 'G'), 20, (w, h))
 step_stride = 0
 img_idx = 0
@@ -64,13 +64,13 @@ net = Model(6, mode).cuda()
 net.load_state_dict(torch.load(checkpoint))
 net.eval()
 for i in range(audio_feats.shape[0]):
-    if img_idx>len_img - 1:
+    if img_idx > len_img - 1:
         step_stride = -1
-    if img_idx<1:
+    if img_idx < 1:
         step_stride = 1
     img_idx += step_stride
-    img_path = img_dir + str(img_idx)+'.jpg'
-    lms_path = lms_dir + str(img_idx)+'.lms'
+    img_path = os.path.join(img_dir, str(img_idx)+'.jpg')
+    lms_path = os.path.join(lms_dir, str(img_idx)+'.lms')
     
     img = cv2.imread(img_path)
     lms_list = []
@@ -103,9 +103,9 @@ for i in range(audio_feats.shape[0]):
     img_concat_T = torch.cat([img_real_ex_T, img_masked_T], axis=0)[None]
     
     audio_feat = get_audio_features(audio_feats, i)
-    if mode=="hubert":
+    if mode == "hubert":
         audio_feat = audio_feat.reshape(32,32,32)
-    if mode=="wenet":
+    if mode == "wenet":
         audio_feat = audio_feat.reshape(256,16,32)
     audio_feat = audio_feat[None]
     audio_feat = audio_feat.cuda()

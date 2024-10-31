@@ -31,13 +31,7 @@ It's so easy to train your own digital human.I will show you step by step.
 conda create -n dh python=3.10
 conda activate dh
 conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
-conda install mkl=2024.0
-pip install opencv-python
-pip install transformers
-pip install numpy==1.23.5
-pip install soundfile
-pip install librosa
-pip install onnxruntime
+pip install -r requirements.txt
 ```
 
 I only ran on pytorch==1.13.1, Other versions should also work.
@@ -90,8 +84,7 @@ Train a syncnet first for better results.
 先训练一个syncnet，效果会更好。
 
 ``` bash
-cd ..
-python syncnet.py --save_dir ./syncnet_ckpt/ --dataset_dir ./data_dir/ --asr hubert
+python train_syncnet_model.py --save_dir ./checkpoint/syncnet_ckpt/ --dataset_dir ./datasets/ --epochs 200 --batchsize 16 --num_workers 4 --lr 0.001 --asr hubert
 ```
 
 Then find a best one（low loss） to train digital human model.
@@ -99,8 +92,7 @@ Then find a best one（low loss） to train digital human model.
 然后找一个loss最低的checkpoint来训练数字人模型。
 
 ``` bash
-cd ..
-python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert --use_syncnet --syncnet_checkpoint syncnet_ckpt
+python train_render_model.py --dataset_dir ./datasets/ --save_dir ./checkpoint/render_ckpt/ --epochs 200 --batchsize 16 --lr 0.001 --asr hubert --use_syncnet --syncnet_checkpoint ./checkpoint/syncnet.pth
 ```
 
 ## inference

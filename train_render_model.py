@@ -1,17 +1,19 @@
-import argparse
 import os
+import argparse
 import cv2
-import torch
+import random
 import numpy as np
+import torch
 import torch.nn as nn
+import torchvision.models as models
+
 from torch import optim
-from tqdm import tqdm
 from torch.utils.data import DataLoader
 from datasetsss import MyDataset
-from syncnet import SyncNet_color
-from unet import Model
-import random
-import torchvision.models as models
+from tqdm import tqdm
+from models.syncnet import SyncNet_color
+from models.unet import Model
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train',
@@ -22,7 +24,7 @@ def get_args():
     parser.add_argument('--save_dir', type=str, help="trained model save path.")
     parser.add_argument('--see_res', action='store_true')
     parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--batchsize', type=int, default=32)
+    parser.add_argument('--batchsize', type=int, default=16)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
 
@@ -68,18 +70,21 @@ def train(net, epoch, batch_size, lr):
     if use_syncnet:
         if args.syncnet_checkpoint == "":
             raise ValueError("Using syncnet, you need to set 'syncnet_checkpoint'.Please check README")
-            
+        
+        if not os.path.exists(args.syncnet_checkpoint):
+            raise ValueError("Syncnet model file not found")
+        
         syncnet = SyncNet_color(args.asr).eval().cuda()
         syncnet.load_state_dict(torch.load(args.syncnet_checkpoint))
-    save_dir= args.save_dir
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
+    save_dir = args.save_dir
+    os.makedirs(save_dir, exist_ok=True)
+
     dataloader_list = []
     dataset_list = []
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
         dataset = MyDataset(dataset_dir, args.asr)
-        train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
+        train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=4)
         dataloader_list.append(train_dataloader)
         dataset_list.append(dataset)
     
@@ -116,7 +121,8 @@ def train(net, epoch, batch_size, lr):
                 p.update(imgs.shape[0])
                 
         if e % 5 == 0:
-            torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
+            torch.save(net.state_dict(), os.path.join(save_dir, "epoch_" + str(e) + '.pth'))
+
         if args.see_res:
             net.eval()
             img_concat_T, img_real_T, audio_feat = dataset.__getitem__(random.randint(0, dataset.__len__()))
@@ -128,14 +134,13 @@ def train(net, epoch, batch_size, lr):
             pred = np.array(pred, dtype=np.uint8)
             img_real = img_real_T.numpy().transpose(1,2,0)*255
             img_real = np.array(img_real, dtype=np.uint8)
-            cv2.imwrite("./train_tmp_img/epoch_"+str(e)+".jpg", pred)
-            cv2.imwrite("./train_tmp_img/epoch_"+str(e)+"_real.jpg", img_real)
+
+            cv2.imwrite(os.path.join("train_tmp_img", "epoch_" + str(e) + ".jpg"), pred)
+            cv2.imwrite(os.path.join("train_tmp_img", "epoch_" + str(e) + "_real.jpg"), img_real)
         
             
 
 if __name__ == '__main__':
-    
-    
     net = Model(6).cuda()
     # net.load_state_dict(torch.load("/usr/anqi/dihuman/checkpoint_female4/3070.pth"))
     train(net, args.epochs, args.batchsize, args.lr)

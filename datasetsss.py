@@ -15,18 +15,20 @@ class MyDataset(Dataset):
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode
-        
-        for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
-            img_path = os.path.join(img_dir+"/full_body_img/", str(i)+".jpg")
-            lms_path = os.path.join(img_dir+"/landmarks/", str(i)+".lms")
+        full_body_img_dir = os.path.join(img_dir, "full_body_img")
+        landmarks_dir = os.path.join(img_dir, "landmarks")
+        
+        for i in range(len(os.listdir(full_body_img_dir))):
+            img_path = os.path.join(full_body_img_dir, str(i) + ".jpg")
+            lms_path = os.path.join(landmarks_dir, str(i) + ".lms")
             self.img_path_list.append(img_path)
             self.lms_path_list.append(lms_path)
         
         if self.mode == "wenet":
-            self.audio_feats = np.load(img_dir+"/aud_wenet.npy")
+            self.audio_feats = np.load(os.path.join(img_dir, "aud_wenet.npy"))
         if self.mode == "hubert":
-            self.audio_feats = np.load(img_dir+"/aud_hu.npy")
+            self.audio_feats = np.load(os.path.join(img_dir, "aud_hu.npy"))
             
         self.audio_feats = self.audio_feats.astype(np.float32)
         print(img_dir)

@@ -1,16 +1,19 @@
-from unet import Model
-import onnx
-import torch
-
-import onnxruntime
-import numpy as np
+import os.path
 import time
-onnx_path = "./dihuman.onnx"
+
+from models.unet import Model
+import onnx
+import onnxruntime
+import torch
+import numpy as np
+
+
+onnx_path = os.path.join("checkpoint", "dihuman.onnx")
 
 def check_onnx(torch_out, torch_in, audio):
     onnx_model = onnx.load(onnx_path)
     onnx.checker.check_model(onnx_model)
-    import onnxruntime
+
     providers = ["CUDAExecutionProvider"]
     ort_session = onnxruntime.InferenceSession(onnx_path, providers=providers)
     print(ort_session.get_providers())
