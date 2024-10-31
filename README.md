@@ -31,6 +31,7 @@ It's so easy to train your own digital human.I will show you step by step.
 conda create -n dh python=3.10
 conda activate dh
 conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install mkl=2024.0
 pip install -r requirements.txt
 ```
 
@@ -137,9 +138,9 @@ If you think this repo is useful to you, please give me a star.
 如果你觉的这个repo对你有用的话，记得给我点个star
 
 BUY ME A CUP OF COFFE⬇️⬇️⬇️
-<!--<table>
+<table>
   <tr>
     <td><img src="demo/15bef5a6d08434c0d70f0ba39bb14fc0.JPG" width="180"/></td>
     <td><img src="demo/36d2896f13bee68247de6ccc89b17a94.JPG" width="180"/></td>
   </tr>
-</table>-->
+</table>
