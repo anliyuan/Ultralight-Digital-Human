@@ -91,12 +91,11 @@ class Dataset(object):
         
         img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex)
         audio_feat = self.get_audio_features(self.audio_feats, idx) # 
-        # audio_feat = self.audio_feats[idx]
         # print(audio_feat.shape)
-        # asd
-        
-        # audio_feat = audio_feat.reshape(128,16,32)
-        audio_feat = audio_feat.reshape(32,32,32)
+        if self.mode=="wenet":
+            audio_feat = audio_feat.reshape(256,16,32)
+        if self.mode=="hubert":
+            audio_feat = audio_feat.reshape(32,32,32)
         y = torch.ones(1).float()
         
         return img_real_T, audio_feat, y
@@ -170,18 +169,18 @@ class SyncNet_color(nn.Module):
             Conv2d(512, 512, kernel_size=3, stride=1, padding=0),
             Conv2d(512, 512, kernel_size=1, stride=1, padding=0),)
         
-        p1 = 128
+        p1 = 256
         p2 = (1, 2)
         if mode == "hubert":
             p1 = 32
             p2 = (2, 2)
         
         self.audio_encoder = nn.Sequential(
-            Conv2d(p1, 128, kernel_size=3, stride=1, padding=1),
-            Conv2d(128, 128, kernel_size=3, stride=1, padding=1, residual=True),
-            Conv2d(128, 128, kernel_size=3, stride=1, padding=1, residual=True),
+            Conv2d(p1, 256, kernel_size=3, stride=1, padding=1),
+            Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
+            Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
             
-            Conv2d(128, 256, kernel_size=3, stride=p2, padding=1),
+            Conv2d(256, 256, kernel_size=3, stride=p2, padding=1),
             Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
             Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
 
