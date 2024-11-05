@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument('--save_dir', type=str, help="trained model save path.")
     parser.add_argument('--see_res', action='store_true')
     parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--batchsize', type=int, default=16)
+    parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
 
@@ -141,6 +141,6 @@ def train(net, epoch, batch_size, lr):
             
 
 if __name__ == '__main__':
-    net = Model(6).cuda()
+    net = Model(6, args.asr).cuda()
     # net.load_state_dict(torch.load("/usr/anqi/dihuman/checkpoint_female4/3070.pth"))
     train(net, args.epochs, args.batchsize, args.lr)

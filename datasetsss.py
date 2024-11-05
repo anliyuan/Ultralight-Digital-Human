@@ -94,21 +94,22 @@ class MyDataset(Dataset):
         img_real = crop_img[4:164, 4:164].copy()
         img_real_ori = img_real.copy()
         img_masked = cv2.rectangle(img_real,(5,5,150,145),(0,0,0),-1)
-        
-#         lms_list = []
-#         with open(lms_path_ex, "r") as f:
-#             lines = f.read().splitlines()
-#             for line in lines:
-#                 arr = line.split(" ")
-#                 arr = np.array(arr, dtype=np.float32)
-#                 lms_list.append(arr)
-#         lms = np.array(lms_list, dtype=np.int32)
-#         xmin = lms[1][0]
-#         ymin = lms[29][1]
-        
-#         xmax = lms[15][0]
-#         width = xmax - xmin
-#         ymax = ymin + width
+
+        lms_list = []
+        with open(lms_path_ex, "r") as f:
+            lines = f.read().splitlines()
+            for line in lines:
+                arr = line.split(" ")
+                arr = np.array(arr, dtype=np.float32)
+                lms_list.append(arr)
+        lms = np.array(lms_list, dtype=np.int32)
+        xmin = lms[1][0]
+        ymin = lms[52][1]
+
+        xmax = lms[31][0]
+        width = xmax - xmin
+        ymax = ymin + width
+
         crop_img = img_ex[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)
         img_real_ex = crop_img[4:164, 4:164].copy()

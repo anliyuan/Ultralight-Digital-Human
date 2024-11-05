@@ -71,18 +71,18 @@ class SyncNet_color(nn.Module):
             Conv2d(512, 512, kernel_size=3, stride=1, padding=0),
             Conv2d(512, 512, kernel_size=1, stride=1, padding=0),)
 
-        p1 = 128
+        p1 = 256
         p2 = (1, 2)
         if mode == "hubert":
             p1 = 32
             p2 = (2, 2)
 
         self.audio_encoder = nn.Sequential(
-            Conv2d(p1, 128, kernel_size=3, stride=1, padding=1),
-            Conv2d(128, 128, kernel_size=3, stride=1, padding=1, residual=True),
-            Conv2d(128, 128, kernel_size=3, stride=1, padding=1, residual=True),
+            Conv2d(p1, 256, kernel_size=3, stride=1, padding=1),
+            Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
+            Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
 
-            Conv2d(128, 256, kernel_size=3, stride=p2, padding=1),
+            Conv2d(256, 256, kernel_size=3, stride=p2, padding=1),
             Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
             Conv2d(256, 256, kernel_size=3, stride=1, padding=1, residual=True),
 

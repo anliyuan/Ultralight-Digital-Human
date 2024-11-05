@@ -489,6 +489,9 @@ if __name__ == '__main__':
 
     stream, sample_rate = sf.read(audio_path) # [T*sample_rate,] float64
 
+    if stream.ndim == 2:
+        stream = stream[:, 0]
+
     # stream = stream[:,0]
     waveform = stream.astype(np.float32)*32767
     waveform = waveform.astype(np.int16)

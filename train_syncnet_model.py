@@ -93,12 +93,11 @@ class Dataset(object):
         
         img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex)
         audio_feat = self.get_audio_features(self.audio_feats, idx) # 
-        # audio_feat = self.audio_feats[idx]
-        # print(audio_feat.shape)
-        # asd
-        
-        # audio_feat = audio_feat.reshape(128,16,32)
-        audio_feat = audio_feat.reshape(32,32,32)
+        if self.mode == "wenet":
+            audio_feat = audio_feat.reshape(256, 16, 32)
+        if self.mode == "hubert":
+            audio_feat = audio_feat.reshape(32, 32, 32)
+
         y = torch.ones(1).float()
         
         return img_real_T, audio_feat, y
