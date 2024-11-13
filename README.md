@@ -110,7 +110,7 @@ python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert 
 
 Before run inference, you need to extract test audio feature(i will merge this step and inference step), run this
 
-在推理之前，需要先提取测试音频的特征（之后会把这步和推理合并到一起去），运行
+在推理之前，需要先提取测试音频的特征（之后会把这步和推理合并到一起去），运行(音频采样率需要是16000K)
 
 ``` bash
 python data_utils/hubert.py --wav your_test_audio.wav  # when using hubert
