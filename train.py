@@ -1,5 +1,8 @@
 import argparse
 import os
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+
 import cv2
 import torch
 import numpy as np
@@ -12,6 +15,8 @@ from syncnet import SyncNet_color
 from unet import Model
 import random
 import torchvision.models as models
+from face_alignment import FaceAlignment, LandmarksType
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train',
@@ -22,7 +27,7 @@ def get_args():
     parser.add_argument('--save_dir', type=str, help="trained model save path.")
     parser.add_argument('--see_res', action='store_true')
     parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--batchsize', type=int, default=32)
+    parser.add_argument('--batchsize', type=int, default=16)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
 
@@ -86,6 +91,9 @@ def train(net, epoch, batch_size, lr):
     optimizer = optim.Adam(net.parameters(), lr=lr)
     criterion = nn.L1Loss()
     
+    fa = FaceAlignment(LandmarksType.TWO_D, device='cuda', flip_input=False)
+    criterionL1 = nn.L1Loss().cuda()
+    
     for e in range(epoch):
         net.train()
         random_i = random.randint(0, len(dataset_dir_list)-1)
@@ -103,18 +111,56 @@ def train(net, epoch, batch_size, lr):
                     y = torch.ones([preds.shape[0],1]).float().cuda()
                     a, v = syncnet(preds, audio_feat)
                     sync_loss = cosine_loss(a, v, y)
-                loss_PerceptualLoss = content_loss.get_loss(preds, labels)
+                loss_PerceptualLoss = content_loss.get_loss(preds, labels)*0.02
                 loss_pixel = criterion(preds, labels)
+                
+                loss_lmks = torch.tensor(0.0).cuda()
+                try:
+                    for land_i in range(preds.shape[0]):
+                        out_frame = preds.permute(0,2,3,1)[land_i].detach().cpu().numpy()*255
+                        # out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                        # source_frame = labels.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                        source_frame = labels.permute(0,2,3,1)[land_i].detach().cpu().numpy()*255
+                        source_preds = fa.get_landmarks(source_frame)
+                        out_preds = fa.get_landmarks(out_frame)
+                        tensor_source_lmks = torch.tensor(source_preds[0])[48:68]
+                        tensor_out_lmks = torch.tensor(out_preds[0])[48:68]
+                        loss_lmks += (criterionL1(tensor_out_lmks, tensor_source_lmks) * 0.2)
+                except:
+                    loss_lmks = torch.tensor(0.0).cuda()
+
+                loss_lmks = loss_lmks / preds.shape[0]
+                loss_lmks = loss_lmks * 0.1
+
+                # try:
+                #     out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                #     # out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                #     # source_frame = labels.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                #     source_frame = labels.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                #     source_preds = fa.get_landmarks(source_frame)
+                #     out_preds = fa.get_landmarks(out_frame)
+                #     tensor_source_lmks = torch.tensor(source_preds[0])[48:68]
+                #     tensor_out_lmks = torch.tensor(out_preds[0])[48:68]
+                #     print('out_preds', tensor_source_lmks.shape)
+                #     loss_lmks += (criterionL1(tensor_out_lmks, tensor_source_lmks) * 0.2)
+                # except:
+                #     loss_lmks = torch.tensor(0.0).cuda()
+
+                # loss_lmks = loss_lmks * 0.1
+
                 if use_syncnet:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01 + 10*sync_loss
+                    loss = loss_pixel + loss_PerceptualLoss + 10*sync_loss + loss_lmks
                 else:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01
+                    loss = loss_pixel + loss_PerceptualLoss + loss_lmks
+
+                print("loss: ",loss.item(), "loss_pixel: ", loss_pixel.item(), "loss_PerceptualLoss: ", loss_PerceptualLoss.item(), "loss_lmks: ", loss_lmks.item())
+
                 p.set_postfix(**{'loss (batch)': loss.item()})
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
                 optimizer.step()
                 p.update(imgs.shape[0])
-                
+
         if e % 5 == 0:
             torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
         if args.see_res:
@@ -128,6 +174,8 @@ def train(net, epoch, batch_size, lr):
             pred = np.array(pred, dtype=np.uint8)
             img_real = img_real_T.numpy().transpose(1,2,0)*255
             img_real = np.array(img_real, dtype=np.uint8)
+            
+            os.makedirs("./train_tmp_img", exist_ok=True)            
             cv2.imwrite("./train_tmp_img/epoch_"+str(e)+".jpg", pred)
             cv2.imwrite("./train_tmp_img/epoch_"+str(e)+"_real.jpg", img_real)
         
@@ -136,6 +184,5 @@ def train(net, epoch, batch_size, lr):
 if __name__ == '__main__':
     
     
-    net = Model(6).cuda()
-    # net.load_state_dict(torch.load("/usr/anqi/dihuman/checkpoint_female4/3070.pth"))
+    net = Model(6, args.asr).cuda()
     train(net, args.epochs, args.batchsize, args.lr)
