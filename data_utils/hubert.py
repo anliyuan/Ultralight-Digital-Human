@@ -8,6 +8,21 @@ wav2vec2_processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls
 print("Loading the HuBERT Model...")
 hubert_model = HubertModel.from_pretrained("facebook/hubert-large-ls960-ft")
 
+def check_onnx_model(onnx_model_path, input_values, output_tensor):
+    import onnxruntime
+    ort_session = onnxruntime.InferenceSession(onnx_model_path)
+
+    # 运行ONNX模型
+    def to_numpy(tensor):
+        return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+    ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(input_values)}
+    ort_outs = ort_session.run(None, ort_inputs)
+
+    print("onnx outputs:", ort_outs)
+    print("torch outputs:", output_tensor)
+
+
 def get_hubert_from_16k_wav(wav_16k_name):
     speech_16k, _ = sf.read(wav_16k_name)
     hubert = get_hubert_from_16k_speech(speech_16k)
@@ -52,6 +67,30 @@ def get_hubert_from_16k_speech(speech, device="cuda:0"):
     if input_values.shape[1] >= kernel: # if the last batch is shorter than kernel_size, skip it            
         hidden_states = hubert_model(input_values).last_hidden_state # [B=1, T=pts//320, hid=1024]
         res_lst.append(hidden_states[0])
+
+        # for onnx export
+        output = hubert_model.forward(input_values)
+        print(output)
+        hidden_states = output.last_hidden_state # [B=1, T=pts//320, hid=1024]
+        export_onnx = True
+        print("Exporting ONNX model", export_onnx)
+        if export_onnx:
+            print("Exporting ONNX model...")
+            torch.onnx.export(hubert_model, 
+                              input_values, 
+                              "hubert.onnx",
+                              export_params=True,
+                            #   verbose=True, 
+                              opset_version=16,
+                              input_names=["input"], 
+                              output_names=["output"],
+                              dynamic_axes={"input": {1: 'size'}})
+
+            print("Exported ONNX model.")
+            check_onnx_model("hubert.onnx", input_values, hidden_states)
+            print("Checked ONNX model.")
+
+    
     ret = torch.cat(res_lst, dim=0).cpu() # [T, 1024]
     # assert ret.shape[0] == expected_T
     assert abs(ret.shape[0] - expected_T) <= 1
