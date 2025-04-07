@@ -3,57 +3,101 @@ import cv2
 import torch
 import random
 import numpy as np
-import random
-
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from collections import defaultdict
 
 
 class MyDataset(Dataset):
-    
-    def __init__(self, img_dir, mode):
-    
-        self.img_path_list = []
-        self.lms_path_list = []
+    def __init__(self, root_dir, mode="hubert"):
+        """
+        Initialize the dataset with multiple video folders.
+        
+        Args:
+            root_dir (str): Path to the directory containing multiple video folders.
+            mode (str): "wenet" or "hubert".
+        """
+        self.root_dir = root_dir
         self.mode = mode
-        
-        for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
-            img_path = os.path.join(img_dir+"/full_body_img/", str(i)+".jpg")
-            lms_path = os.path.join(img_dir+"/landmarks/", str(i)+".lms")
-            self.img_path_list.append(img_path)
-            self.lms_path_list.append(lms_path)
+        self.video_dict = defaultdict()
 
-        if self.mode == "wenet":
-            self.audio_feats = np.load(img_dir+"/aud_wenet.npy")
-        if self.mode == "hubert":
-            self.audio_feats = np.load(img_dir+"/aud_hu.npy")
-            
-        self.audio_feats = self.audio_feats.astype(np.float32)
-        print(img_dir)
-        print(self.audio_feats.shape)
-        print(len(self.img_path_list))
-        
-        if len(self.img_path_list) > self.audio_feats.shape[0]:
-            print('audio features and images not match!')
-            self.img_path_list = self.img_path_list[:self.audio_feats.shape[0]]
-        elif len(self.img_path_list) < self.audio_feats.shape[0]:
-            print('audio features and images not match!')
-            self.audio_feats = self.audio_feats[-len(self.img_path_list):]
+        # Traverse all subdirectories (each subdirectory corresponds to a video)
+        for video_name in sorted(os.listdir(root_dir)):
+            video_dir = os.path.join(root_dir, video_name)
+            if not os.path.isdir(video_dir):
+                continue
 
+            img_dir = os.path.join(video_dir, "full_body_img")
+            lms_dir = os.path.join(video_dir, "landmarks")
+
+            # Check if required directories exist
+            if not os.path.exists(img_dir) or not os.path.exists(lms_dir):
+                print(f"[WARNING] Skipping invalid video folder: {video_dir}")
+                continue
+
+            # Collect image and landmarks paths
+            img_paths = sorted(
+                [os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith(".jpg")],
+                key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+            )
+            lms_paths = sorted(
+                [os.path.join(lms_dir, f) for f in os.listdir(lms_dir) if f.endswith(".lms")],
+                key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+            )
+
+            # Load audio features path
+            if mode == "wenet":
+                aud_path = os.path.join(video_dir, "aud_wenet.npy")
+            elif mode == "hubert":
+                aud_path = os.path.join(video_dir, "aud_hu_tiny.npy")
+            else:
+                raise ValueError("Invalid mode. Must be 'wenet' or 'hubert'.")
+
+            if not os.path.exists(aud_path):
+                print(f"[WARNING] Skipping video folder due to missing audio file: {video_dir}")
+                continue
+
+            # Ensure consistency between images and audio features
+            audio_feats = np.load(aud_path).astype(np.float32)
+            # frame_len = len(img_paths)
+
+            print(f"{video_name}: img len: {len(img_paths)}, aud len: {audio_feats.shape[0]}, lms len: {len(lms_paths)}")
+
+            assert len(img_paths) == len(lms_paths)
+            assert abs(len(img_paths) - audio_feats.shape[0]) <= 2
+
+            # Store paths in the dictionary
+            self.video_dict[video_name] = {
+                "img_paths": img_paths,
+                "lms_paths": lms_paths,
+                "audio_feats": aud_path
+            }
+
+        # Ensure the dataset is not empty
+        if len(self.video_dict) == 0:
+            raise ValueError("No valid videos found in the root directory.")
+
+        # Define augmentation transforms
         self.aug_trans = transforms.Compose([
-            # transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.1, hue=0.05)
-             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.1)
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.1)
         ])
         self.aug_imgs_flags = True
+        self.video_dict_list = list(self.video_dict.keys())
 
+        total_frames_len = 0
+        self.cumulative_lengths = []
+        for video_name in self.video_dict_list:
+            frame_len = len(self.video_dict[video_name]["img_paths"])
+            total_frames_len += frame_len
+            self.cumulative_lengths.append(total_frames_len)
 
     def __len__(self):
-        # return len(self.img_path_list)-1
-        # return len(self.img_path_list)
-        return self.audio_feats.shape[0]-1
-    
+        # Return the number of videos in the dataset
+        return self.cumulative_lengths[-1]
+
     def get_audio_features(self, features, index):
+        # load audio features
+        features = np.load(features).astype(np.float32)
         left = index - 4
         right = index + 4
         pad_left = 0
@@ -68,23 +112,9 @@ class MyDataset(Dataset):
         if pad_left > 0:
             auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
         if pad_right > 0:
-            auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0) # [8, 16]
+            auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0)
         return auds
-    
-    def get_audio_features_1(self, features, index):
-    
-        left = index - 8
-        pad_left = 0
-        if left < 0:
-            pad_left = -left
-            left = 0
-        auds = features[left:index]
-        auds = torch.from_numpy(auds)
-        if pad_left > 0:
-            # pad may be longer than auds, so do not use zeros_like
-            auds = torch.cat([torch.zeros(pad_left, *auds.shape[1:], device=auds.device, dtype=auds.dtype), auds], dim=0)
-        return auds
-    
+
     def process_img(self, img, lms_path, img_ex, lms_path_ex):
         lms_list = []
         with open(lms_path, "r") as f:
@@ -93,6 +123,7 @@ class MyDataset(Dataset):
                 arr = line.split(" ")
                 arr = np.array(arr, dtype=np.float32)
                 lms_list.append(arr)
+
         lms = np.array(lms_list, dtype=np.int32)
         xmin = lms[1][0]
         ymin = lms[52][1]
@@ -155,20 +186,52 @@ class MyDataset(Dataset):
 
         return img_concat_T, img_real_T
 
-    def __getitem__(self, idx):
-        img = cv2.imread(self.img_path_list[idx])
-        lms_path = self.lms_path_list[idx]
-        
-        ex_int = random.randint(0, self.__len__()-1)
-        img_ex = cv2.imread(self.img_path_list[ex_int])
-        lms_path_ex = self.lms_path_list[ex_int]
-        
-        img_concat_T, img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex)
-        audio_feat = self.get_audio_features(self.audio_feats, idx) 
+    def get_video_and_index(self, idx):
+        # Find which video and frame index the given global index belongs to
+        for i, cumulative_length in enumerate(self.cumulative_lengths):
+            if idx < cumulative_length:
+                video_name = self.video_dict_list[i]
+                video_data = self.video_dict[video_name]
+                local_idx = idx - (self.cumulative_lengths[i - 1] if i > 0 else 0)
+                ref_local_idx = random.randint(0, len(video_data["img_paths"]) - 1)
 
+                return video_name, video_data, local_idx, ref_local_idx
+
+        raise IndexError("Index out of range.")
+
+    def __getitem__(self, index):
+        # Randomly select a video and frame index
+        video_name, video_data, local_idx, ref_local_idx = self.get_video_and_index(index)
+        # Load image, landmarks, and audio features
+        img = cv2.imread(video_data["img_paths"][local_idx])
+        lms_path = video_data["lms_paths"][local_idx]
+        audio_feat = self.get_audio_features(video_data["audio_feats"], local_idx)
+
+        # Randomly select another index for augmentation
+        ex_int = ref_local_idx
+        img_ex = cv2.imread(video_data["img_paths"][ex_int])
+        lms_path_ex = video_data["lms_paths"][ex_int]
+
+        # Process images
+        img_concat_T, img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex)
+
+        # Reshape audio features based on mode
         if self.mode == "wenet":
-            audio_feat = audio_feat.reshape(256,16,32)
-        if self.mode == "hubert":
-            audio_feat = audio_feat.reshape(16,32,32)
-        
+            audio_feat = audio_feat.reshape(256, 16, 32)
+        elif self.mode == "hubert":
+            audio_feat = audio_feat.reshape(16, 24, 32)
+
         return img_concat_T, img_real_T, audio_feat
+
+
+# 使用示例
+if __name__ == "__main__":
+    root_dir = "/path/to/video_folders"
+    mode = "hubert"  # or "wenet"
+
+    dataset = MultiVideoDataset(root_dir, mode)
+    dataloader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=4)
+
+    for img_concat_T, img_real_T, audio_feat in dataloader:
+        # 在这里进行模型训练
+        pass
