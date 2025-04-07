@@ -79,6 +79,11 @@ Then you wait.
 
 然后等它运行完就行了
 
+
+### 注意事项：
+由于使用的是整个长视频，注意确认一下图片帧数和音频特征长度的对齐情况，音频帧数和视频帧数要尽量接近，最好不要差超过5帧，不然训练的时候数据pair就不对齐了，效果就可能会比较差。
+
+
 ### train
 
 After the preprocessing step, you can start training the model.
