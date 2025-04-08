@@ -1,0 +1,179 @@
+# from transformers import Wav2Vec2Processor, HubertModel
+from transformers import (
+    Wav2Vec2FeatureExtractor,
+    HubertModel,
+)
+
+import soundfile as sf
+import numpy as np
+import torch
+import os
+
+
+print("Loading the Wav2Vec2 Processor...")
+# wav2vec2_processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
+
+cur_path = os.path.dirname(os.path.abspath(__file__))
+model_path = os.path.join(cur_path, "../pretrained_models/hubert")
+
+wav2vec2_processor = Wav2Vec2FeatureExtractor.from_pretrained(model_path)
+print("Loading the HuBERT Model...")
+
+def check_onnx_model(onnx_model_path, input_values, output_tensor):
+    import onnxruntime
+    ort_session = onnxruntime.InferenceSession(onnx_model_path)
+
+    # 运行ONNX模型
+    def to_numpy(tensor):
+        return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+    ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(input_values)}
+    ort_outs = ort_session.run(None, ort_inputs)
+
+    print("onnx outputs:", ort_outs)
+    print("torch outputs:", output_tensor)
+
+
+# ckpt = torch.load(ckpt_path)
+#         # new_state_dict = collections.OrderedDict()
+#         # for k, v in ckpt['model'].items():
+#         #     name = k  # remove "module."
+#         #     if name == 'hubert_model.encoder.pos_conv_embed.conv.parametrizations.weight.original0' or name == 'hubert_model.encoder.pos_conv_embed.conv.parametrizations.weight.original1':
+#         #         name = name.replace('.pos_conv_embed.conv.parametrizations.weight.original0', '.pos_conv_embed.conv.weight_g')
+#         #         name = name.replace('.pos_conv_embed.conv.parametrizations.weight.original1', '.pos_conv_embed.conv.weight_v')
+#         #     print('name', name)
+#         #     new_state_dict[name] = v
+
+#         model.load_state_dict(ckpt['model'])
+#         # model.load_state_dict(new_state_dict)
+#         print('load model from {}'.format(ckpt_path))
+
+
+hubert_model = HubertModel.from_pretrained(model_path)
+
+# for name, param in hubert_model.named_parameters():
+#     if 'pos' in name:
+#         print(name, param.shape)
+
+def get_hubert_from_16k_wav(wav_16k_name):
+    speech_16k, _ = sf.read(wav_16k_name)
+    hubert = get_hubert_from_16k_speech(speech_16k)
+
+    return hubert
+
+@torch.no_grad()
+def get_hubert_from_16k_speech(speech, device="cuda:0"):
+    global hubert_model
+    hubert_model = hubert_model.to(device)
+    if speech.ndim ==2:
+        speech = speech[:, 0] # [T, 2] ==> [T,]
+    
+    print("speech shape: ", speech.shape, speech[:100])
+    
+    input_values_all = wav2vec2_processor(speech, return_tensors="pt", sampling_rate=16000).input_values # [1, T]
+
+    # input_values_all = torch.from_numpy(speech).float().unsqueeze(0).to(device) # [1, T]
+    input_values_all = input_values_all.to(device)
+    print("input_values_all shape: ", input_values_all.shape, input_values_all[:100], type(input_values_all))
+    # For long audio sequence, due to the memory limitation, we cannot process them in one run
+    # HuBERT process the wav with a CNN of stride [5,2,2,2,2,2], making a stride of 320
+    # Besides, the kernel is [10,3,3,3,3,2,2], making 400 a fundamental unit to get 1 time step.
+    # So the CNN is euqal to a big Conv1D with kernel k=400 and stride s=320
+    # We have the equation to calculate out time step: T = floor((t-k)/s)
+    # To prevent overlap, we set each clip length of (K+S*(N-1)), where N is the expected length T of this clip
+    # The start point of next clip should roll back with a length of (kernel-stride) so it is stride * N
+    kernel = 400
+    stride = 320
+    clip_length = stride * 1000
+    num_iter = input_values_all.shape[1] // clip_length
+    expected_T = (input_values_all.shape[1] - (kernel-stride)) // stride
+    res_lst = []
+
+    print("num_iter: ", num_iter)
+    for i in range(num_iter):
+        if i == 0:
+            start_idx = 0
+            end_idx = clip_length - stride + kernel
+        else:
+            start_idx = clip_length * i
+            end_idx = start_idx + (clip_length - stride + kernel)
+
+        input_values = input_values_all[:, start_idx: end_idx]
+
+        print("input_values shape: ", input_values.shape, input_values[:100])
+
+        output = hubert_model.forward(input_values)
+        print(output)
+        hidden_states = output.last_hidden_state # [B=1, T=pts//320, hid=1024]
+
+        res_lst.append(hidden_states[0])
+
+    if num_iter > 0:
+        input_values = input_values_all[:, clip_length * num_iter:]
+    else:
+        input_values = input_values_all
+    # if input_values.shape[1] != 0:
+    if input_values.shape[1] >= kernel: # if the last batch is shorter than kernel_size, skip it  
+        # hidden_states = hubert_model(input_values).last_hidden_state # [B=1, T=pts//320, hid=1024]
+        output = hubert_model.forward(input_values)
+        print(output)
+        hidden_states = output.last_hidden_state # [B=1, T=pts//320, hid=1024]
+        export_onnx = True
+        print("Exporting ONNX model", export_onnx)
+        if export_onnx:
+            print("Exporting ONNX model...")
+            torch.onnx.export(hubert_model, 
+                              input_values, 
+                              "hubert.onnx",
+                              export_params=True,
+                            #   verbose=True, 
+                              opset_version=16,
+                              input_names=["input"], 
+                              output_names=["output"],
+                              dynamic_axes={"input": {1: 'size'}})
+
+            print("Exported ONNX model.")
+            check_onnx_model("hubert.onnx", input_values, hidden_states)
+            print("Checked ONNX model.")
+
+        res_lst.append(hidden_states[0])
+
+    ret = torch.cat(res_lst, dim=0).cpu() # [T, 1024]
+    # assert ret.shape[0] == expected_T
+    assert abs(ret.shape[0] - expected_T) <= 1
+    if ret.shape[0] < expected_T:
+        ret = torch.nn.functional.pad(ret, (0,0,0,expected_T-ret.shape[0]))
+    else:
+        ret = ret[:expected_T]
+    return ret
+
+def make_even_first_dim(tensor):
+    size = list(tensor.size())
+    if size[0] % 2 == 1:
+        size[0] -= 1
+        return tensor[:size[0]]
+    return tensor
+
+import soundfile as sf
+import numpy as np
+import torch
+from argparse import ArgumentParser
+import librosa
+
+parser = ArgumentParser()
+parser.add_argument('--wav', type=str, help='')
+args = parser.parse_args()
+
+wav_name = args.wav
+
+speech, sr = sf.read(wav_name)
+speech_16k = librosa.resample(speech, orig_sr=sr, target_sr=16000)
+print("SR: {} to {}".format(sr, 16000))
+# print(speech.shape, speech_16k.shape)
+
+hubert_hidden = get_hubert_from_16k_speech(speech_16k)
+print('hubert hidden shape: ', hubert_hidden.shape)
+# print(hubert_hidden[:2])
+hubert_hidden = make_even_first_dim(hubert_hidden).reshape(-1, 2, 768)
+np.save(wav_name.replace('.wav', '_hu_tiny.npy'), hubert_hidden.detach().numpy())
+print(hubert_hidden.detach().numpy().shape)
