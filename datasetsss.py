@@ -59,12 +59,18 @@ class MyDataset(Dataset):
 
             # Ensure consistency between images and audio features
             audio_feats = np.load(aud_path).astype(np.float32)
+            if audio_feats.shape[0] < 30 or len(img_paths) < 30:
+                print(f"[WARNING] Skipping video folder due to too short audio file: {video_dir}")
+                continue
+
             # frame_len = len(img_paths)
 
             print(f"{video_name}: img len: {len(img_paths)}, aud len: {audio_feats.shape[0]}, lms len: {len(lms_paths)}")
 
             assert len(img_paths) == len(lms_paths)
-            assert abs(len(img_paths) - audio_feats.shape[0]) <= 2
+            if abs(len(img_paths) - audio_feats.shape[0]) > 2:
+                print(f"{video_name} is not consistent.")
+                continue
 
             # Store paths in the dictionary
             self.video_dict[video_name] = {
@@ -93,11 +99,12 @@ class MyDataset(Dataset):
 
     def __len__(self):
         # Return the number of videos in the dataset
-        return self.cumulative_lengths[-1]
+        return self.cumulative_lengths[-1] - 1
 
     def get_audio_features(self, features, index):
         # load audio features
         features = np.load(features).astype(np.float32)
+
         left = index - 4
         right = index + 4
         pad_left = 0
@@ -109,10 +116,12 @@ class MyDataset(Dataset):
             pad_right = right - features.shape[0]
             right = features.shape[0]
         auds = torch.from_numpy(features[left:right])
+
         if pad_left > 0:
-            auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
+            auds = torch.cat([torch.zeros((pad_left, auds.shape[1], auds.shape[2])), auds], dim=0)
         if pad_right > 0:
-            auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0)
+            auds = torch.cat([auds, torch.zeros((pad_right, auds.shape[1], auds.shape[2]))], dim=0)
+
         return auds
 
     def process_img(self, img, lms_path, img_ex, lms_path_ex):
@@ -127,11 +136,11 @@ class MyDataset(Dataset):
         lms = np.array(lms_list, dtype=np.int32)
         xmin = lms[1][0]
         ymin = lms[52][1]
-        
+
         xmax = lms[31][0]
         width = xmax - xmin
         ymax = ymin + width
-        
+
         random_pixel_shift_x = random.randint(-5, 5)
         random_pixel_shift_y = random.randint(-5, 5)
         crop_img = img[ymin - width // 2 + random_pixel_shift_y:ymax + random_pixel_shift_y, xmin + random_pixel_shift_x:xmax + random_pixel_shift_x]
