@@ -53,6 +53,9 @@ def get_landmark(full_img_dir, landmarks_dir):
                 x, y = p[0] + x1, p[1] + y1
                 f.write(f"{x} {y}\n")
 
+def is_empty_directory(path):
+    return len(os.listdir(path)) == 0
+
 def process_video(video_path, base_dir, asr_mode):
     """
     Process a single video file.
@@ -63,10 +66,26 @@ def process_video(video_path, base_dir, asr_mode):
     full_img_dir = os.path.join(base_dir, 'full_body_img')
 
     os.makedirs(landmarks_dir, exist_ok=True)
-    extract_audio(video_path, wav_path)
-    extract_images(video_path, asr_mode, full_img_dir)
-    get_landmark(full_img_dir, landmarks_dir)
-    get_audio_feature(wav_path, asr_mode)
+    os.makedirs(full_img_dir, exist_ok=True)
+    if os.path.exists(wav_path):
+        print(f"[INFO] Audio file already exists: {wav_path}")
+    else:
+        extract_audio(video_path, wav_path)
+
+    if not is_empty_directory(full_img_dir):
+        print(f"[INFO] images already exist: {full_img_dir}")
+    else:
+        extract_images(video_path, asr_mode, full_img_dir)
+
+    if not is_empty_directory(landmarks_dir):
+        print(f"[INFO] Full body images already exist: {landmarks_dir}")
+    else:
+        get_landmark(full_img_dir, landmarks_dir)
+
+    if os.path.exists(os.path.join(base_dir, 'aud_hu_tiny.npy')):
+        print(f"[INFO] Audio feature already exists: {os.path.join(base_dir, 'aud_hu_tiny.npy')}")
+    else:
+        get_audio_feature(wav_path, asr_mode)
 
 def process_folder(folder_path, asr_mode):
     """
@@ -78,7 +97,10 @@ def process_folder(folder_path, asr_mode):
             video_path = os.path.join(folder_path, filename)
             base_dir = os.path.join(folder_path, os.path.splitext(filename)[0])
             os.makedirs(base_dir, exist_ok=True)
-            process_video(video_path, base_dir, asr_mode)
+            try:
+                process_video(video_path, base_dir, asr_mode)
+            except Exception as e:
+                print(f"[ERROR] Failed to process video: {video_path} \nReason: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
