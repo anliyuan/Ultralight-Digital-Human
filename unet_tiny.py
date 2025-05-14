@@ -9,10 +9,10 @@ class ResidualBlock(nn.Module):
     def __init__(self, channels, kernel_size1, kernel_size2):
         super(ResidualBlock, self).__init__()
 
-        self.conv1 = nn.Conv1d(channels, channels, kernel_size1, padding=(kernel_size1 - 1) // 2)
+        self.conv1 = DepthwiseSeparableConv1D(channels, channels, kernel_size1, padding=(kernel_size1 - 1) // 2)
         self.bn1 = nn.BatchNorm1d(channels)
         self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(channels, channels, kernel_size2, padding=(kernel_size2 - 1) // 2)
+        self.conv2 = DepthwiseSeparableConv1D(channels, channels, kernel_size2, padding=(kernel_size2 - 1) // 2)
         self.bn2 = nn.BatchNorm1d(channels)
 
     def forward(self, x):
@@ -24,64 +24,96 @@ class ResidualBlock(nn.Module):
         out = self.bn2(out)
         out += residual  # 残差连接
         out = self.relu(out)
+
         return out
 
 
-class Conv1DFeatureExtractor(nn.Module):
+class DepthwiseSeparableConv1D(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        super(DepthwiseSeparableConv1D, self).__init__()
+        self.depthwise = nn.Conv1d(in_channels, in_channels, kernel_size, stride, padding, groups=in_channels)
+        self.pointwise = nn.Conv1d(in_channels, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        x = self.depthwise(x)
+        x = self.pointwise(x)
+
+        return x
+
+
+class LightweightConv1DFeatureExtractor(nn.Module):
     def __init__(self, in_channels, out_channels, num_layers):
-        super(Conv1DFeatureExtractor, self).__init__()
-        self.initial_conv = nn.Conv1d(in_channels, out_channels, 5, padding=2)
+        super(LightweightConv1DFeatureExtractor, self).__init__()
+        self.initial_conv = DepthwiseSeparableConv1D(in_channels, out_channels, kernel_size=5, padding=2)
         self.initial_bn = nn.BatchNorm1d(out_channels)
         self.relu = nn.ReLU()
-        
-        # self.initial_conv2 = nn.Conv1d(out_channels, out_channels, 3, padding=1, stride=2)
-        # self.initial_bn2 = nn.BatchNorm1d(out_channels)
-        # self.relu2 = nn.ReLU()
 
         self.residual_layers = nn.Sequential(
             *[ResidualBlock(out_channels, 3, 3) for _ in range(num_layers)]
         )
-
+        self.linear = nn.Linear(out_channels, 1024)
+        
 
     def forward(self, x):
         out = self.initial_conv(x)
         out = self.initial_bn(out)
         out = self.relu(out)
-
-        # out = self.initial_conv2(out)
-        # out = self.initial_bn2(out)
-        # out = self.relu2(out)
-
         out = self.residual_layers(out)
+        out = self.linear(out.permute(0, 2, 1))
 
-        return out
+        return out.permute(0, 2, 1)
 
 
-class Conv1DFeatureExtractor2(nn.Module):
-    def __init__(self, in_channels, out_channels, num_layers):
-        super(Conv1DFeatureExtractor2, self).__init__()
-        self.initial_conv = nn.Conv1d(in_channels, out_channels // 4, 5, padding=2)
-        self.initial_bn = nn.BatchNorm1d(out_channels // 4)
-        self.relu = nn.ReLU()
+class InvertedResidual1D(nn.Module):
+    def __init__(self, inp, oup, stride, expand_ratio):
+        super(InvertedResidual1D, self).__init__()
+        self.stride = stride
+        hidden_dim = int(round(inp * expand_ratio))
+        self.use_res_connect = self.stride == 1 and inp == oup
 
-        self.residual_layers = nn.Sequential(
-            *[ResidualBlock(out_channels // 4, 3, 3) for _ in range(num_layers)]
+        layers = []
+        if expand_ratio != 1:
+            # Pointwise
+            layers.append(nn.Conv1d(inp, hidden_dim, kernel_size=1, stride=1, bias=False))
+            layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.ReLU(inplace=True))
+        # Depthwise
+        layers.extend([
+            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, stride=stride, padding=1, groups=hidden_dim, bias=False),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(inplace=True)
+        ])
+        # Pointwise-linear
+        layers.extend([
+            nn.Conv1d(hidden_dim, oup, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm1d(oup)
+        ])
+        self.conv = nn.Sequential(*layers)
+
+    def forward(self, x):
+        if self.use_res_connect:
+            return x + self.conv(x)
+        else:
+            return self.conv(x)
+
+
+class InvertedResidual1DFeatureExtractor(nn.Module):
+    def __init__(self, in_channels, out_channels, num_layers, expand_ratio=4):
+        super(InvertedResidual1DFeatureExtractor, self).__init__()
+        self.initial_conv = nn.Sequential(
+            nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm1d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+        self.layers = nn.Sequential(
+            *[InvertedResidual1D(out_channels, out_channels, stride=1, expand_ratio=expand_ratio) for _ in range(num_layers)]
         )
 
-        self.initial_conv2 = nn.Conv1d(out_channels // 4, out_channels, 5, padding=2)
-        self.initial_bn2 = nn.BatchNorm1d(out_channels)
-        self.relu2 = nn.ReLU()
-
     def forward(self, x):
-        out = self.initial_conv(x)
-        out = self.initial_bn(out)
-        out = self.relu(out)
-        out = self.residual_layers(out)
-        out = self.initial_conv2(out)
-        out = self.initial_bn2(out)
-        out = self.relu2(out)
+        x = self.initial_conv(x)
+        x = self.layers(x)
 
-        return out
+        return x
 
 
 class InvertedResidual(nn.Module):
@@ -174,46 +206,11 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-class AudioConvWenet(nn.Module):
-    def __init__(self):
-        super(AudioConvWenet, self).__init__()
-        # ch = [16, 32, 64, 128, 256]   # if you want to run this model on a mobile device, use this. 
-        ch = [32, 64, 128, 256, 512]
-        self.conv1 = InvertedResidual(ch[2], ch[2], stride=1, use_res_connect=True, expand_ratio=2)
-        self.conv2 = InvertedResidual(ch[2], ch[2], stride=1, use_res_connect=True, expand_ratio=2)
-        
-        self.conv3 = nn.Conv2d(ch[2], ch[3], kernel_size=3, padding=1, stride=(1,2))
-        self.bn3 = nn.BatchNorm2d(ch[3])
-        
-        self.conv4 = InvertedResidual(ch[3], ch[3], stride=1, use_res_connect=True, expand_ratio=2)
-        
-        self.conv5 = nn.Conv2d(ch[3], ch[4], kernel_size=3, padding=3, stride=2)
-        self.bn5 = nn.BatchNorm2d(ch[4])
-        self.relu = nn.ReLU()
-        
-        self.conv6 = InvertedResidual(ch[4], ch[4], stride=1, use_res_connect=True, expand_ratio=2)
-        self.conv7 = InvertedResidual(ch[4], ch[4], stride=1, use_res_connect=True, expand_ratio=2)
-    
-    def forward(self, x):
-        
-        x = self.conv1(x)
-        x = self.conv2(x)
-        
-        x = self.relu(self.bn3(self.conv3(x)))
-        
-        x = self.conv4(x)
-        
-        x = self.relu(self.bn5(self.conv5(x)))
-        
-        x = self.conv6(x)
-        x = self.conv7(x)
-    
-        return x
     
 class AudioConvHubert(nn.Module):
     def __init__(self):
         super(AudioConvHubert, self).__init__()
-        ch = [8, 16, 32, 64, 128]   # if you want to run this model on a mobile device, use this. 
+        # ch = [8, 16, 32, 64, 128]   # if you want to run this model on a mobile device, use this. 
         ch = [16, 32, 64, 128, 256]   # if you want to run this model on a mobile device, use this. 
         # ch = [32, 64, 128, 256, 512]
 
@@ -252,14 +249,14 @@ class Model(nn.Module):
     def __init__(self,n_channels=6, mode='hubert'):
         super(Model, self).__init__()
         self.n_channels = n_channels   #BGR
-        # ch = [16, 32, 64, 128, 256]  # if you want to run this model on a mobile device, use this. 
-        ch = [32, 64, 128, 256, 512]
+        ch = [16, 32, 64, 128, 256] # if you want to run this model on a mobile device, use this. 
+        # ch = [32, 64, 128, 256, 512]
         
         if mode=='hubert':
             self.audio_model = AudioConvHubert()
         if mode=='wenet':
             self.audio_model = AudioConvWenet()
-            
+
         self.fuse_conv = nn.Sequential(
             DoubleConvDW(ch[4] + 256, ch[4], stride=1),
             DoubleConvDW(ch[4], ch[3], stride=1)
@@ -277,7 +274,11 @@ class Model(nn.Module):
         self.up4 = Up(ch[1], ch[0])
 
         self.outc = OutConv(ch[0], 3)
-        self.audio_encoder = Conv1DFeatureExtractor(768, 1024, 3)
+        audio_encoder_name = 'LightweightConv1DFeatureExtractor'
+        if  audio_encoder_name == 'LightweightConv1DFeatureExtractor':
+            self.audio_encoder = LightweightConv1DFeatureExtractor(768, 256, 3)
+        elif audio_encoder_name == 'Conv1DFeatureExtractor':
+            self.audio_encoder = Conv1DFeatureExtractor(768, 256, 3)
 
 
     def forward(self, x, audio_feat):
