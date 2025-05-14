@@ -100,6 +100,12 @@ def train(net, epoch, batch_size, lr):
         dataset = dataset_list[random_i]
         train_dataloader = dataloader_list[random_i]
         
+        if e == 0:
+            torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
+        
+        # torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
+        
+        
         with tqdm(total=len(dataset), desc=f'Epoch {e + 1}/{epoch}', unit='img') as p:
             for batch in train_dataloader:
                 imgs, labels, audio_feat = batch
@@ -111,16 +117,18 @@ def train(net, epoch, batch_size, lr):
                     y = torch.ones([preds.shape[0],1]).float().cuda()
                     a, v = syncnet(preds, audio_feat)
                     sync_loss = cosine_loss(a, v, y)
-                loss_PerceptualLoss = content_loss.get_loss(preds, labels)*0.02
+
+                loss_PerceptualLoss = content_loss.get_loss(preds, labels)*0.05
                 loss_pixel = criterion(preds, labels)
-                
+
                 loss_lmks = torch.tensor(0.0).cuda()
+
                 try:
                     for land_i in range(preds.shape[0]):
-                        out_frame = preds.permute(0,2,3,1)[land_i].detach().cpu().numpy()*255
-                        # out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
-                        # source_frame = labels.permute(0,2,3,1)[0].detach().cpu().numpy()*255
-                        source_frame = labels.permute(0,2,3,1)[land_i].detach().cpu().numpy()*255
+                        # out_frame = preds.permute(0,2,3,1)[land_i].detach().cpu().numpy()*255
+                        out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                        source_frame = labels.permute(0,2,3,1)[0].detach().cpu().numpy()*255
+                        # source_frame = labels.permute(0,2,3,1)[land_i].detach().cpu().numpy()*255
                         source_preds = fa.get_landmarks(source_frame)
                         out_preds = fa.get_landmarks(out_frame)
                         tensor_source_lmks = torch.tensor(source_preds[0])[48:68]
@@ -132,6 +140,32 @@ def train(net, epoch, batch_size, lr):
                 loss_lmks = loss_lmks / preds.shape[0]
                 loss_lmks = loss_lmks * 0.1
 
+                #### -------- 计算灰度图loss -------- ###        
+                def rgb_to_grayscale(image):
+                    # image格式为 (B, C, H, W)
+                    # RGB转灰度的权重
+                    weights = torch.tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1).cuda()
+                    grayscale = (image * weights).sum(dim=1, keepdim=True)
+
+                    return grayscale
+
+                # 可以同时添加灰度图的梯度loss来增强纹理细节
+                def gradient_loss(gray_image):
+                    # 计算水平和垂直方向的梯度
+                    gradient_h = gray_image[:, :, :, 1:] - gray_image[:, :, :, :-1]
+                    gradient_v = gray_image[:, :, 1:, :] - gray_image[:, :, :-1, :]
+
+                    return gradient_h, gradient_v
+
+                gray_real = rgb_to_grayscale(labels)
+                gray_fake = rgb_to_grayscale(preds)
+                gray_loss = criterionL1(gray_fake, gray_real) * 0.5   # lamb_gray是权重系数,可以设置为0.5-1.0
+
+                grad_real_h, grad_real_v = gradient_loss(gray_real)
+                grad_fake_h, grad_fake_v = gradient_loss(gray_fake)
+                gradient_loss = (criterionL1(grad_fake_h, grad_real_h) + 
+                                criterionL1(grad_fake_v, grad_real_v))  # lamb_gradient可以设置为0.1-0.5
+
                 # try:
                 #     out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
                 #     # out_frame = preds.permute(0,2,3,1)[0].detach().cpu().numpy()*255
@@ -141,7 +175,7 @@ def train(net, epoch, batch_size, lr):
                 #     out_preds = fa.get_landmarks(out_frame)
                 #     tensor_source_lmks = torch.tensor(source_preds[0])[48:68]
                 #     tensor_out_lmks = torch.tensor(out_preds[0])[48:68]
-                #     print('out_preds', tensor_source_lmks.shape)
+                #     # print('out_preds', tensor_source_lmks.shape)
                 #     loss_lmks += (criterionL1(tensor_out_lmks, tensor_source_lmks) * 0.2)
                 # except:
                 #     loss_lmks = torch.tensor(0.0).cuda()
@@ -149,11 +183,12 @@ def train(net, epoch, batch_size, lr):
                 # loss_lmks = loss_lmks * 0.1
 
                 if use_syncnet:
-                    loss = loss_pixel + loss_PerceptualLoss + 10*sync_loss + loss_lmks
+                    loss = loss_pixel + loss_PerceptualLoss + 10*sync_loss + loss_lmks + gradient_loss + gray_loss
                 else:
-                    loss = loss_pixel + loss_PerceptualLoss + loss_lmks
+                    loss = loss_pixel + loss_PerceptualLoss + loss_lmks + gradient_loss + gray_loss
 
-                print("loss: ",loss.item(), "loss_pixel: ", loss_pixel.item(), "loss_PerceptualLoss: ", loss_PerceptualLoss.item(), "loss_lmks: ", loss_lmks.item())
+                print("loss: ",loss.item(), "loss_pixel: ", loss_pixel.item(), "loss_PerceptualLoss: ", loss_PerceptualLoss.item(), 
+                      "loss_lmks: ", loss_lmks.item(), "gradient_loss: ", gradient_loss.item(), "gray_loss: ", gray_loss.item())
 
                 p.set_postfix(**{'loss (batch)': loss.item()})
                 optimizer.zero_grad(set_to_none=True)
@@ -163,6 +198,7 @@ def train(net, epoch, batch_size, lr):
 
         if e % 5 == 0:
             torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
+
         if args.see_res:
             net.eval()
             img_concat_T, img_real_T, audio_feat = dataset.__getitem__(random.randint(0, dataset.__len__()))
@@ -174,15 +210,12 @@ def train(net, epoch, batch_size, lr):
             pred = np.array(pred, dtype=np.uint8)
             img_real = img_real_T.numpy().transpose(1,2,0)*255
             img_real = np.array(img_real, dtype=np.uint8)
-            
-            os.makedirs("./train_tmp_img", exist_ok=True)            
-            cv2.imwrite("./train_tmp_img/epoch_"+str(e)+".jpg", pred)
-            cv2.imwrite("./train_tmp_img/epoch_"+str(e)+"_real.jpg", img_real)
-        
-            
+
+            os.makedirs(os.path.join(save_dir, "train_tmp_img"), exist_ok=True)
+            cv2.imwrite(os.path.join(save_dir, "train_tmp_img", "epoch_"+str(e)+".jpg"), pred)
+            cv2.imwrite(os.path.join(save_dir, "train_tmp_img", "epoch_"+str(e)+"_real.jpg"), img_real)
+
 
 if __name__ == '__main__':
-    
-    
     net = Model(6, args.asr).cuda()
     train(net, args.epochs, args.batchsize, args.lr)
