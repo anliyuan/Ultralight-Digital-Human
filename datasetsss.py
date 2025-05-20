@@ -76,7 +76,7 @@ class MyDataset(Dataset):
             self.video_dict[video_name] = {
                 "img_paths": img_paths,
                 "lms_paths": lms_paths,
-                "audio_feats": aud_path
+                "audio_feats": audio_feats
             }
 
         # Ensure the dataset is not empty
@@ -103,7 +103,7 @@ class MyDataset(Dataset):
 
     def get_audio_features(self, features, index):
         # load audio features
-        features = np.load(features).astype(np.float32)
+        # features = np.load(features).astype(np.float32)
 
         left = index - 4
         right = index + 4
