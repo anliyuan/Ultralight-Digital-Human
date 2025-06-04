@@ -107,11 +107,10 @@ Then find a best one（low loss） to train digital human model.
 
 然后找一个loss最低的checkpoint来训练数字人模型。
 
-``` bash
 2025.6.4更新
 关于syncnet，看到很多issue里面大家提syncnet写的不对。因为这个项目也没有很明确的指标，在生产中，加不加syncnet对结果影响并不大，视觉上不会看出来什么差异的（在我的大量实验中是这样的）。或者说有没有同学可以提供一个更好的syncnet方法？欢迎PR。
 
-
+``` bash
 cd ..
 python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert --use_syncnet --syncnet_checkpoint syncnet_ckpt
 ```
