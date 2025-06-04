@@ -13,6 +13,8 @@ from unet import Model
 import random
 import torchvision.models as models
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 def get_args():
     parser = argparse.ArgumentParser(description='Train',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -36,9 +38,9 @@ class PerceptualLoss():
     def contentFunc(self):
         conv_3_3_layer = 14
         cnn = models.vgg19(pretrained=True).features
-        cnn = cnn.cuda()
+        cnn = cnn.to(device)
         model = nn.Sequential()
-        model = model.cuda()
+        model = model.to(device)
         for i,layer in enumerate(list(cnn)):
             model.add_module(str(i),layer)
             if i == conv_3_3_layer:
@@ -69,7 +71,7 @@ def train(net, epoch, batch_size, lr):
         if args.syncnet_checkpoint == "":
             raise ValueError("Using syncnet, you need to set 'syncnet_checkpoint'.Please check README")
             
-        syncnet = SyncNet_color(args.asr).eval().cuda()
+        syncnet = SyncNet_color(args.asr).eval().to(device)
         syncnet.load_state_dict(torch.load(args.syncnet_checkpoint))
     save_dir= args.save_dir
     if not os.path.exists(save_dir):
@@ -95,12 +97,12 @@ def train(net, epoch, batch_size, lr):
         with tqdm(total=len(dataset), desc=f'Epoch {e + 1}/{epoch}', unit='img') as p:
             for batch in train_dataloader:
                 imgs, labels, audio_feat = batch
-                imgs = imgs.cuda()
-                labels = labels.cuda()
-                audio_feat = audio_feat.cuda()
+                imgs = imgs.to(device)
+                labels = labels.to(device)
+                audio_feat = audio_feat.to(device)
                 preds = net(imgs, audio_feat)
                 if use_syncnet:
-                    y = torch.ones([preds.shape[0],1]).float().cuda()
+                    y = torch.ones([preds.shape[0],1]).float().to(device)
                     a, v = syncnet(preds, audio_feat)
                     sync_loss = cosine_loss(a, v, y)
                 loss_PerceptualLoss = content_loss.get_loss(preds, labels)
@@ -120,8 +122,8 @@ def train(net, epoch, batch_size, lr):
         if args.see_res:
             net.eval()
             img_concat_T, img_real_T, audio_feat = dataset.__getitem__(random.randint(0, dataset.__len__()))
-            img_concat_T = img_concat_T[None].cuda()
-            audio_feat = audio_feat[None].cuda()
+            img_concat_T = img_concat_T[None].to(device)
+            audio_feat = audio_feat[None].to(device)
             with torch.no_grad():
                 pred = net(img_concat_T, audio_feat)[0]
             pred = pred.cpu().numpy().transpose(1,2,0)*255
@@ -136,5 +138,5 @@ def train(net, epoch, batch_size, lr):
 if __name__ == '__main__':
     
     
-    net = Model(6, args.asr).cuda()
+    net = Model(6, args.asr).to(device)
     train(net, args.epochs, args.batchsize, args.lr)

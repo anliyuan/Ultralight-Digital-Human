@@ -28,6 +28,8 @@ dataset_dir = args.dataset
 audio_feat_path = args.audio_feat
 mode = args.asr
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 def get_audio_features(features, index):
     left = index - 8
     right = index + 8
@@ -60,8 +62,8 @@ if mode=="wenet":
 step_stride = 0
 img_idx = 0
 
-net = Model(6, mode).cuda()
-net.load_state_dict(torch.load(checkpoint))
+net = Model(6, mode).to(device)
+net.load_state_dict(torch.load(checkpoint, map_location=device))
 net.eval()
 for i in range(audio_feats.shape[0]):
     if img_idx>len_img - 1:
@@ -99,17 +101,17 @@ for i in range(audio_feats.shape[0]):
     img_real_ex = img_real_ex.transpose(2,0,1).astype(np.float32)
     
     img_real_ex_T = torch.from_numpy(img_real_ex / 255.0)
-    img_masked_T = torch.from_numpy(img_masked / 255.0)
+    img_masked_T = torch.from_numpy(img_masked / 255.0).to(device)
     img_concat_T = torch.cat([img_real_ex_T, img_masked_T], axis=0)[None]
     
     audio_feat = get_audio_features(audio_feats, i)
     if mode=="hubert":
         audio_feat = audio_feat.reshape(32,32,32)
     if mode=="wenet":
-        audio_feat = audio_feat.reshape(256,16,32)
+        audio_feat = audio_feat.reshape(128,16,32)
     audio_feat = audio_feat[None]
-    audio_feat = audio_feat.cuda()
-    img_concat_T = img_concat_T.cuda()
+    audio_feat = audio_feat.to(device)
+    img_concat_T = img_concat_T.to(device)
     
     with torch.no_grad():
         pred = net(img_concat_T, audio_feat)[0]

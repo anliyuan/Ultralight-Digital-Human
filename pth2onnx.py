@@ -5,7 +5,7 @@ import torch
 import onnxruntime
 import numpy as np
 import time
-onnx_path = "./dihuman.onnx"
+onnx_path = "./kanghui_wenet.onnx"
 
 def check_onnx(torch_out, torch_in, audio):
     onnx_model = onnx.load(onnx_path)
@@ -26,7 +26,7 @@ def check_onnx(torch_out, torch_in, audio):
         
 
 net = Model(6).eval()
-net.load_state_dict(torch.load("20.pth"))
+net.load_state_dict(torch.load("checkpoint_kanghui/50.pth"))
 img = torch.zeros([1, 6, 160, 160])
 audio = torch.zeros([1, 128, 16, 32])
 
