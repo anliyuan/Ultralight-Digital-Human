@@ -136,7 +136,7 @@ class MyDataset(Dataset):
         if self.mode == "wenet":
             audio_feat = audio_feat.reshape(128,16,32)
         if self.mode == "hubert":
-            audio_feat = audio_feat.reshape(32,32,32)
+            audio_feat = audio_feat.reshape(16,32,32)
         
         return img_concat_T, img_real_T, audio_feat
     

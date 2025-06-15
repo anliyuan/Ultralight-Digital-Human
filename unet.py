@@ -134,7 +134,7 @@ class AudioConvHubert(nn.Module):
         super(AudioConvHubert, self).__init__()
         # ch = [16, 32, 64, 128, 256]   # if you want to run this model on a mobile device, use this. 
         ch = [32, 64, 128, 256, 512]
-        self.conv1 = InvertedResidual(32, ch[1], stride=1, use_res_connect=False, expand_ratio=2)
+        self.conv1 = InvertedResidual(16, ch[1], stride=1, use_res_connect=False, expand_ratio=2)
         self.conv2 = InvertedResidual(ch[1], ch[2], stride=1, use_res_connect=False, expand_ratio=2)
         
         self.conv3 = nn.Conv2d(ch[2], ch[3], kernel_size=3, padding=1, stride=(2,2))
