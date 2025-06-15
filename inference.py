@@ -31,8 +31,8 @@ mode = args.asr
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def get_audio_features(features, index):
-    left = index - 8
-    right = index + 8
+    left = index - 4
+    right = index + 4
     pad_left = 0
     pad_right = 0
     if left < 0:
@@ -106,7 +106,7 @@ for i in range(audio_feats.shape[0]):
     
     audio_feat = get_audio_features(audio_feats, i)
     if mode=="hubert":
-        audio_feat = audio_feat.reshape(32,32,32)
+        audio_feat = audio_feat.reshape(16,32,32)
     if mode=="wenet":
         audio_feat = audio_feat.reshape(128,16,32)
     audio_feat = audio_feat[None]
