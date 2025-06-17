@@ -26,17 +26,18 @@ fbank = knf.OnlineFbank(opts)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_path', type=str, default="/data/service/")
+parser.add_argument('--data_path', type=str, default="/data/service/", help="数据存放路径")
 arg = parser.parse_args()
 
 class DiHumanProcessor:
     def __init__(self, data_path):
         
         # 图片和关键点数据
-        self.full_body_img_dir = os.path.join(data_path, "img_inference")
-        self.lms_dir = os.path.join(data_path, "lms_inference")
+        self.full_body_img_dir = os.path.join(data_path, "img_inference") # 图片路径
+        self.lms_dir = os.path.join(data_path, "lms_inference") # 关键点路径
         self.full_body_img_list = []
         self.bbox_list = []
+        ## 数据预加载⬇️
         for i in range(len(os.listdir(self.lms_dir))-1):
             full_body_img = cv2.imread(os.path.join(self.full_body_img_dir, str(i)+'.jpg'))
             self.full_body_img_list.append(full_body_img)
@@ -57,10 +58,12 @@ class DiHumanProcessor:
             bbox = [xmin, ymin, xmax, ymax]
             self.bbox_list.append(bbox)
 
+        # 准备wenet推理时用到的一些数据
         self.offset = np.ones((1, ), dtype=np.int64)*100
         self.att_cache = np.zeros([3,8,16,128], dtype=np.float32)
         self.cnn_cache = np.zeros([3,1,512,14], dtype=np.float32)
 
+        # 放一定量的空音频
         self.audio_play_list = [0]*13440
         providers = ["CUDAExecutionProvider"]
         self.ort_unet_session = onnxruntime.InferenceSession(os.path.join(data_path, "unet.onnx"), providers=providers)
@@ -99,16 +102,16 @@ class DiHumanProcessor:
                 self.silence = True
         
         else:
-            self.empty_audio_counter = 0
+            self.empty_audio_counter = 0 # 否则重置计数器
             self.silence = False
             
-        if not self.silence:
-            if not self.is_processing:
+        if not self.silence:  # 如果送进来的不是全0的音频
+            if not self.is_processing:  # 第一次推理重置参数
                 self.reset()
-            if audio_frame.shape[0]<160:
+            if audio_frame.shape[0]<160: # 默认送进来的是10ms的音频帧
                 audio_frame = np.pad(audio_frame,(0, 160-audio_frame.shape[0]))
-            self.audio_queue_get_feat = np.concatenate([self.audio_queue_get_feat, audio_frame], axis=0)
-        else:
+            self.audio_queue_get_feat = np.concatenate([self.audio_queue_get_feat, audio_frame], axis=0)  # 积攒起来，攒够一定量后开始处理
+        else:  ## 如果是静音视频的话就就按顺序返回图片 同时返回空音频
             self.audio_queue_get_feat = np.array([])
             self.is_processing = False
             if self.counter == 0:
@@ -132,23 +135,23 @@ class DiHumanProcessor:
             return return_img, playing_audio, check_img
         
         # 690ms的音频，暂时不改
-        if self.audio_queue_get_feat.shape[0]>=11040:
+        if self.audio_queue_get_feat.shape[0]>=11040:  # 攒够690 ms的音频后开始处理
             
             fbank = knf.OnlineFbank(opts)
             audio_mel_feat = []
 
-            fbank.accept_waveform(16000, self.audio_queue_get_feat.tolist())
-            self.audio_play_list.extend(self.audio_queue_get_feat[32*160:32*160+800])
+            fbank.accept_waveform(16000, self.audio_queue_get_feat.tolist()) # fbank
+            self.audio_play_list.extend(self.audio_queue_get_feat[32*160:32*160+800]) # 将正在处理的音频加到播放列表里
             for i in range(fbank.num_frames_ready):
                 audio_mel_feat.append(fbank.get_frame(i))
             audio_mel_feat = np.array([[audio_mel_feat]])
             audio_mel_feat = audio_mel_feat[:,:,:67, :]
             ort_encoder_inputs = {'chunk': audio_mel_feat.astype(np.float32), 'offset':self.offset, 'att_cache':self.att_cache.astype(np.float32), 'cnn_cache':self.cnn_cache.astype(np.float32)}
-            ort_encoder_outs = self.ort_ae_session.run(None, ort_encoder_inputs)
+            ort_encoder_outs = self.ort_ae_session.run(None, ort_encoder_inputs)  # wenet提取特征
             audio_feat = ort_encoder_outs[0]
-            self.audio_queue_get_feat = self.audio_queue_get_feat[800:]
+            self.audio_queue_get_feat = self.audio_queue_get_feat[800:] # 丢弃处理过的音频
             
-            self.using_feat = np.concatenate([self.using_feat, audio_feat], axis=0)
+            self.using_feat = np.concatenate([self.using_feat, audio_feat], axis=0)  # 将音频特征积攒起来，攒够一定量开始处理
             img = self.full_body_img_list[self.index].copy()
             bbox = self.bbox_list[self.index]
             
@@ -159,7 +162,7 @@ class DiHumanProcessor:
             elif self.index<=0:
                 self.step = 1
             
-            if self.using_feat.shape[0]>=8:
+            if self.using_feat.shape[0]>=8: # 音频特征攒够8帧 开始输出图片 下面的逻辑和inference里的一样
                 
                 xmin,ymin,xmax,ymax = bbox
                 crop_img = img[ymin:ymax, xmin:xmax]
@@ -195,7 +198,7 @@ class DiHumanProcessor:
             t2 = time.time()
             self.counter = 1
             check_img = 1
-        else:
+        else: # 音频不够时仅返回播放列表里的音频 返回空图像
             if self.counter == 0:
                 return_img =  self.full_body_img_list[self.index].copy()
                 self.index += self.step
@@ -233,15 +236,15 @@ if __name__ =="__main__":
     from scipy.io import wavfile
     stream, sample_rate = sf.read("1.wav") # [T*sample_rate,] float64
     #stream = stream[:,0]
-    stream = stream.astype(np.float32)*32767
+    stream = stream.astype(np.float32)*32767 # 读音频
     stream = stream.astype(np.int16)
     video_writer = cv2.VideoWriter("./test_video.mp4", cv2.VideoWriter_fourcc('M','J','P', 'G'), 20, (1280, 720))
     audio_data = []
-    processor = DiHumanProcessor("./dataset_kanghui_wenet/111/")
+    processor = DiHumanProcessor("./dataset_kanghui_wenet/111/") # 初始化
     audio_stream_len = stream.shape[0]
     empty_audio = np.zeros([160])
     
-    for i in range(math.ceil(audio_stream_len/160)):
+    for i in range(math.ceil(audio_stream_len/160)): # 将音频拆成10ms 不断调用
         if i*160+160<audio_stream_len:
             audio_frame = stream[i*160:i*160+160]
         else:

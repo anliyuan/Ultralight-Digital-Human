@@ -30,7 +30,7 @@ mode = args.asr
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-def get_audio_features(features, index):
+def get_audio_features(features, index): # 这个逻辑跟datasets里面的逻辑相同
     left = index - 4
     right = index + 4
     pad_left = 0
@@ -67,7 +67,7 @@ net.load_state_dict(torch.load(checkpoint, map_location=device))
 net.eval()
 for i in range(audio_feats.shape[0]):
     if img_idx>len_img - 1:
-        step_stride = -1
+        step_stride = -1  # step_stride 决定取图片的间隔，目前这个逻辑是从头开始一张一张往后，到最后一张后再一张一张往前
     if img_idx<1:
         step_stride = 1
     img_idx += step_stride
@@ -82,7 +82,7 @@ for i in range(audio_feats.shape[0]):
             arr = line.split(" ")
             arr = np.array(arr, dtype=np.float32)
             lms_list.append(arr)
-    lms = np.array(lms_list, dtype=np.int32)
+    lms = np.array(lms_list, dtype=np.int32)  # 这个关键点检测模型之后之后可能会改掉
     xmin = lms[1][0]
     ymin = lms[52][1]
 
@@ -100,9 +100,10 @@ for i in range(audio_feats.shape[0]):
     img_masked = img_masked.transpose(2,0,1).astype(np.float32)
     img_real_ex = img_real_ex.transpose(2,0,1).astype(np.float32)
     
-    img_real_ex_T = torch.from_numpy(img_real_ex / 255.0)
-    img_masked_T = torch.from_numpy(img_masked / 255.0).to(device)
+    img_real_ex_T = torch.from_numpy(img_real_ex / 255.0).to(device)
+    img_masked_T = torch.from_numpy(img_masked / 255.0).to(device)  
     img_concat_T = torch.cat([img_real_ex_T, img_masked_T], axis=0)[None]
+    # 这个地方逻辑和dataset里面完全一样，只是不需要另外取一张参考图 而是用要推理的这张图片即可
     
     audio_feat = get_audio_features(audio_feats, i)
     if mode=="hubert":
