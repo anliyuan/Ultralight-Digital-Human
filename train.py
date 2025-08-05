@@ -117,8 +117,8 @@ def train(net, epoch, batch_size, lr):
                 optimizer.step()
                 p.update(imgs.shape[0])
                 
-        if e % 5 == 0:
-            torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
+        if (e + 1) % 5 == 0:
+            torch.save(net.state_dict(), os.path.join(save_dir, str(e + 1).zfill(5)+'.pth'))
         if args.see_res:
             net.eval()
             img_concat_T, img_real_T, audio_feat = dataset.__getitem__(random.randint(0, dataset.__len__()))
