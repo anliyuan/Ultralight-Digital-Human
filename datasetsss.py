@@ -10,11 +10,12 @@ from torch.utils.data import DataLoader
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(self, img_dir, mode, max_sample_retries=8):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.max_sample_retries = max_sample_retries
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -70,6 +71,8 @@ class MyDataset(Dataset):
         ymax = ymin + width
         
         crop_img = img[ymin:ymax, xmin:xmax] # 将人脸下半部分区域裁切出来
+        if crop_img.size == 0:
+            raise ValueError(f"empty crop for source landmarks: {lms_path}")
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
         # resize后保留边缘的4个像素，如果视频分辨率比较大的话 建议把resize值和这个值都改大 但宽高必须能被16整除，同时模型结构也要改
         img_real = crop_img[4:164, 4:164].copy() # 保留边缘的4个像素防止贴回去的时候比较违和
@@ -92,6 +95,8 @@ class MyDataset(Dataset):
         width = xmax - xmin
         ymax = ymin + width
         crop_img = img_ex[ymin:ymax, xmin:xmax]
+        if crop_img.size == 0:
+            raise ValueError(f"empty crop for reference landmarks: {lms_path_ex}")
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
         img_real_ex = crop_img[4:164, 4:164].copy()
         
@@ -106,12 +111,16 @@ class MyDataset(Dataset):
 
         return img_concat_T, img_real_T
 
-    def __getitem__(self, idx):
+    def _load_sample(self, idx):
         img = cv2.imread(self.img_path_list[idx])
+        if img is None:
+            raise ValueError(f"failed to read source image: {self.img_path_list[idx]}")
         lms_path = self.lms_path_list[idx]
         
         ex_int = random.randint(0, self.__len__()-1)
         img_ex = cv2.imread(self.img_path_list[ex_int])
+        if img_ex is None:
+            raise ValueError(f"failed to read reference image: {self.img_path_list[ex_int]}")
         lms_path_ex = self.lms_path_list[ex_int]
         
         img_concat_T, img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex) ## 图像处理
@@ -123,5 +132,15 @@ class MyDataset(Dataset):
             audio_feat = audio_feat.reshape(16,32,32)  ## 这个地方的16 / 128跟合并起来的音频特征帧数有关
         
         return img_concat_T, img_real_T, audio_feat
+
+    def __getitem__(self, idx):
+        last_error = None
+        for _ in range(self.max_sample_retries):
+            try:
+                return self._load_sample(idx)
+            except Exception as exc:
+                last_error = exc
+                idx = random.randint(0, self.__len__() - 1)
+        raise RuntimeError(f"failed to load a valid sample after {self.max_sample_retries} retries") from last_error
     
         
