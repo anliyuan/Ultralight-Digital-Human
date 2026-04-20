@@ -7,14 +7,16 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from audio_index_shift import shifted_audio_index
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(self, img_dir, mode, audio_index_shift=0):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.audio_index_shift = audio_index_shift
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -115,7 +117,8 @@ class MyDataset(Dataset):
         lms_path_ex = self.lms_path_list[ex_int]
         
         img_concat_T, img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex) ## 图像处理
-        audio_feat = self.get_audio_features(self.audio_feats, idx)  ## 音频特征处理
+        audio_idx = shifted_audio_index(idx, self.audio_index_shift, self.audio_feats.shape[0])
+        audio_feat = self.get_audio_features(self.audio_feats, audio_idx)  ## 音频特征处理
         
         if self.mode == "wenet":
             audio_feat = audio_feat.reshape(128,16,32)

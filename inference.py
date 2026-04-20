@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from audio_index_shift import shifted_audio_index
 # from unet2 import Model
 # from unet_att import Model
 
@@ -20,6 +21,7 @@ parser.add_argument('--dataset', type=str, default="")
 parser.add_argument('--audio_feat', type=str, default="")
 parser.add_argument('--save_path', type=str, default="")     # end with .mp4 please
 parser.add_argument('--checkpoint', type=str, default="")
+parser.add_argument('--audio_index_shift', type=int, default=0)
 args = parser.parse_args()
 
 checkpoint = args.checkpoint
@@ -105,7 +107,8 @@ for i in range(audio_feats.shape[0]):
     img_concat_T = torch.cat([img_real_ex_T, img_masked_T], axis=0)[None]
     # 这个地方逻辑和dataset里面完全一样，只是不需要另外取一张参考图 而是用要推理的这张图片即可
     
-    audio_feat = get_audio_features(audio_feats, i)
+    audio_idx = shifted_audio_index(i, args.audio_index_shift, audio_feats.shape[0])
+    audio_feat = get_audio_features(audio_feats, audio_idx)
     if mode=="hubert":
         audio_feat = audio_feat.reshape(16,32,32)
     if mode=="wenet":
