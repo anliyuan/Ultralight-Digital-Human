@@ -7,14 +7,27 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from data_utils.mask_utils import apply_blackout_mask
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(
+        self,
+        img_dir,
+        mode,
+        mask_left_ratio=5 / 160,
+        mask_top_ratio=5 / 160,
+        mask_right_ratio=150 / 160,
+        mask_bottom_ratio=145 / 160,
+    ):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.mask_left_ratio = mask_left_ratio
+        self.mask_top_ratio = mask_top_ratio
+        self.mask_right_ratio = mask_right_ratio
+        self.mask_bottom_ratio = mask_bottom_ratio
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -74,7 +87,13 @@ class MyDataset(Dataset):
         # resize后保留边缘的4个像素，如果视频分辨率比较大的话 建议把resize值和这个值都改大 但宽高必须能被16整除，同时模型结构也要改
         img_real = crop_img[4:164, 4:164].copy() # 保留边缘的4个像素防止贴回去的时候比较违和
         img_real_ori = img_real.copy()
-        img_masked = cv2.rectangle(img_real,(5,5,150,145),(0,0,0),-1) # 将图片中间区域涂黑
+        img_masked = apply_blackout_mask(
+            img_real,
+            left_ratio=self.mask_left_ratio,
+            top_ratio=self.mask_top_ratio,
+            right_ratio=self.mask_right_ratio,
+            bottom_ratio=self.mask_bottom_ratio,
+        )  # 将图片中间区域涂黑
         
         # 取一张随机图像作为参考和要做推理的图像一起输入 ⬇️⬇️⬇️
         lms_list = []

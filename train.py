@@ -27,6 +27,10 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument('--mask_left_ratio', type=float, default=5 / 160)
+    parser.add_argument('--mask_top_ratio', type=float, default=5 / 160)
+    parser.add_argument('--mask_right_ratio', type=float, default=150 / 160)
+    parser.add_argument('--mask_bottom_ratio', type=float, default=145 / 160)
 
     return parser.parse_args()
 
@@ -80,7 +84,14 @@ def train(net, epoch, batch_size, lr):
     dataset_list = []
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
-        dataset = MyDataset(dataset_dir, args.asr)
+        dataset = MyDataset(
+            dataset_dir,
+            args.asr,
+            mask_left_ratio=args.mask_left_ratio,
+            mask_top_ratio=args.mask_top_ratio,
+            mask_right_ratio=args.mask_right_ratio,
+            mask_bottom_ratio=args.mask_bottom_ratio,
+        )
         train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
         dataloader_list.append(train_dataloader)
         dataset_list.append(dataset)

@@ -11,6 +11,7 @@ import logging
 import struct
 import argparse
 import kaldi_native_fbank as knf
+from data_utils.mask_utils import apply_blackout_mask
 
 opts = knf.FbankOptions()
 opts.frame_opts.dither = 0
@@ -27,6 +28,10 @@ fbank = knf.OnlineFbank(opts)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, default="/data/service/", help="数据存放路径")
+parser.add_argument('--mask_left_ratio', type=float, default=5 / 160)
+parser.add_argument('--mask_top_ratio', type=float, default=5 / 160)
+parser.add_argument('--mask_right_ratio', type=float, default=150 / 160)
+parser.add_argument('--mask_bottom_ratio', type=float, default=145 / 160)
 arg = parser.parse_args()
 
 class DiHumanProcessor:
@@ -171,7 +176,13 @@ class DiHumanProcessor:
                 crop_img_ori = crop_img.copy()
                 img_real_ex = crop_img[4:164, 4:164].copy()
                 img_real_ex_ori = img_real_ex.copy()
-                img_masked = cv2.rectangle(img_real_ex_ori,(5,5,150,145),(0,0,0),-1)
+                img_masked = apply_blackout_mask(
+                    img_real_ex_ori,
+                    left_ratio=arg.mask_left_ratio,
+                    top_ratio=arg.mask_top_ratio,
+                    right_ratio=arg.mask_right_ratio,
+                    bottom_ratio=arg.mask_bottom_ratio,
+                )
 
                 img_masked = img_masked.transpose(2,0,1).astype(np.float32)/255.0
                 img_real_ex = img_real_ex.transpose(2,0,1).astype(np.float32)/255.0

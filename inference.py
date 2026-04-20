@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from data_utils.mask_utils import apply_blackout_mask
 # from unet2 import Model
 # from unet_att import Model
 
@@ -20,6 +21,10 @@ parser.add_argument('--dataset', type=str, default="")
 parser.add_argument('--audio_feat', type=str, default="")
 parser.add_argument('--save_path', type=str, default="")     # end with .mp4 please
 parser.add_argument('--checkpoint', type=str, default="")
+parser.add_argument('--mask_left_ratio', type=float, default=5 / 160)
+parser.add_argument('--mask_top_ratio', type=float, default=5 / 160)
+parser.add_argument('--mask_right_ratio', type=float, default=150 / 160)
+parser.add_argument('--mask_bottom_ratio', type=float, default=145 / 160)
 args = parser.parse_args()
 
 checkpoint = args.checkpoint
@@ -95,7 +100,13 @@ for i in range(audio_feats.shape[0]):
     crop_img_ori = crop_img.copy()
     img_real_ex = crop_img[4:164, 4:164].copy()
     img_real_ex_ori = img_real_ex.copy()
-    img_masked = cv2.rectangle(img_real_ex_ori,(5,5,150,145),(0,0,0),-1)
+    img_masked = apply_blackout_mask(
+        img_real_ex_ori,
+        left_ratio=args.mask_left_ratio,
+        top_ratio=args.mask_top_ratio,
+        right_ratio=args.mask_right_ratio,
+        bottom_ratio=args.mask_bottom_ratio,
+    )
     
     img_masked = img_masked.transpose(2,0,1).astype(np.float32)
     img_real_ex = img_real_ex.transpose(2,0,1).astype(np.float32)
