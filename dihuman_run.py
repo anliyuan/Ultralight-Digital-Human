@@ -11,6 +11,7 @@ import logging
 import struct
 import argparse
 import kaldi_native_fbank as knf
+from data_utils.crop_utils import expanded_square_crop_from_landmarks
 
 opts = knf.FbankOptions()
 opts.frame_opts.dither = 0
@@ -27,16 +28,18 @@ fbank = knf.OnlineFbank(opts)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, default="/data/service/", help="数据存放路径")
+parser.add_argument('--crop_expand_ratio', type=float, default=1.0)
 arg = parser.parse_args()
 
 class DiHumanProcessor:
-    def __init__(self, data_path):
+    def __init__(self, data_path, crop_expand_ratio=1.0):
         
         # 图片和关键点数据
         self.full_body_img_dir = os.path.join(data_path, "img_inference") # 图片路径
         self.lms_dir = os.path.join(data_path, "lms_inference") # 关键点路径
         self.full_body_img_list = []
         self.bbox_list = []
+        self.crop_expand_ratio = crop_expand_ratio
         ## 数据预加载⬇️
         for i in range(len(os.listdir(self.lms_dir))-1):
             full_body_img = cv2.imread(os.path.join(self.full_body_img_dir, str(i)+'.jpg'))
@@ -50,11 +53,9 @@ class DiHumanProcessor:
                     arr = np.array(arr, dtype=np.float32)
                     lms_list.append(arr)
             lms = np.array(lms_list, dtype=np.int32)
-            xmin = lms[1][0]
-            ymin = lms[52][1]
-            xmax = lms[31][0]
-            width = xmax - xmin
-            ymax = ymin + width
+            xmin, ymin, xmax, ymax = expanded_square_crop_from_landmarks(
+                lms, full_body_img.shape, expand_ratio=self.crop_expand_ratio
+            )
             bbox = [xmin, ymin, xmax, ymax]
             self.bbox_list.append(bbox)
 
@@ -240,7 +241,7 @@ if __name__ =="__main__":
     stream = stream.astype(np.int16)
     video_writer = cv2.VideoWriter("./test_video.mp4", cv2.VideoWriter_fourcc('M','J','P', 'G'), 20, (1280, 720))
     audio_data = []
-    processor = DiHumanProcessor("./dataset_kanghui_wenet/111/") # 初始化
+    processor = DiHumanProcessor("./dataset_kanghui_wenet/111/", crop_expand_ratio=arg.crop_expand_ratio) # 初始化
     audio_stream_len = stream.shape[0]
     empty_audio = np.zeros([160])
     

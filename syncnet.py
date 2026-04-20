@@ -8,14 +8,16 @@ import numpy as np
 from torch import optim
 import random
 import argparse
+from data_utils.crop_utils import expanded_square_crop_from_landmarks
 
 
 
 class Dataset(object):
-    def __init__(self, dataset_dir, mode):
+    def __init__(self, dataset_dir, mode, crop_expand_ratio=1.0):
         
         self.img_path_list = []
         self.lms_path_list = []
+        self.crop_expand_ratio = crop_expand_ratio
         
         for i in range(len(os.listdir(dataset_dir+"/full_body_img/"))):
 
@@ -65,12 +67,9 @@ class Dataset(object):
                 arr = np.array(arr, dtype=np.float32)
                 lms_list.append(arr)
         lms = np.array(lms_list, dtype=np.int32)
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        xmin, ymin, xmax, ymax = expanded_square_crop_from_landmarks(
+            lms, img.shape, expand_ratio=self.crop_expand_ratio
+        )
         
         crop_img = img[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)
@@ -214,11 +213,11 @@ def cosine_loss(a, v, y):
 
     return loss
     
-def train(save_dir, dataset_dir, mode):
+def train(save_dir, dataset_dir, mode, crop_expand_ratio):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
         
-    train_dataset = Dataset(dataset_dir, mode=mode)
+    train_dataset = Dataset(dataset_dir, mode=mode, crop_expand_ratio=crop_expand_ratio)
     train_data_loader = DataLoader(
         train_dataset, batch_size=16, shuffle=True,
         num_workers=4)
@@ -247,6 +246,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_dir', type=str)
     parser.add_argument('--dataset_dir', type=str)
     parser.add_argument('--asr', type=str)
+    parser.add_argument('--crop_expand_ratio', type=float, default=1.0)
     opt = parser.parse_args()
     
     # syncnet = SyncNet_color(mode=opt.asr)
@@ -255,4 +255,4 @@ if __name__ == "__main__":
     # audio = torch.zeros([1,16,32,32])
     # audio_embedding, face_embedding = syncnet(img, audio)
     # print(audio_embedding.shape, face_embedding.shape)
-    train(opt.save_dir, opt.dataset_dir, opt.asr)
+    train(opt.save_dir, opt.dataset_dir, opt.asr, opt.crop_expand_ratio)

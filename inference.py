@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from data_utils.crop_utils import expanded_square_crop_from_landmarks
 # from unet2 import Model
 # from unet_att import Model
 
@@ -20,6 +21,7 @@ parser.add_argument('--dataset', type=str, default="")
 parser.add_argument('--audio_feat', type=str, default="")
 parser.add_argument('--save_path', type=str, default="")     # end with .mp4 please
 parser.add_argument('--checkpoint', type=str, default="")
+parser.add_argument('--crop_expand_ratio', type=float, default=1.0)
 args = parser.parse_args()
 
 checkpoint = args.checkpoint
@@ -83,12 +85,9 @@ for i in range(audio_feats.shape[0]):
             arr = np.array(arr, dtype=np.float32)
             lms_list.append(arr)
     lms = np.array(lms_list, dtype=np.int32)  # 这个关键点检测模型之后之后可能会改掉
-    xmin = lms[1][0]
-    ymin = lms[52][1]
-
-    xmax = lms[31][0]
-    width = xmax - xmin
-    ymax = ymin + width
+    xmin, ymin, xmax, ymax = expanded_square_crop_from_landmarks(
+        lms, img.shape, expand_ratio=args.crop_expand_ratio
+    )
     crop_img = img[ymin:ymax, xmin:xmax]
     h, w = crop_img.shape[:2]
     crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)

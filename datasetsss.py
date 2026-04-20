@@ -7,14 +7,16 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from data_utils.crop_utils import expanded_square_crop_from_landmarks
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(self, img_dir, mode, crop_expand_ratio=1.0):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.crop_expand_ratio = crop_expand_ratio
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -62,12 +64,9 @@ class MyDataset(Dataset):
                 arr = np.array(arr, dtype=np.float32)
                 lms_list.append(arr)
         lms = np.array(lms_list, dtype=np.int32)  # 关键点坐标
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        xmin, ymin, xmax, ymax = expanded_square_crop_from_landmarks(
+            lms, img.shape, expand_ratio=self.crop_expand_ratio
+        )
         
         crop_img = img[ymin:ymax, xmin:xmax] # 将人脸下半部分区域裁切出来
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
@@ -85,12 +84,9 @@ class MyDataset(Dataset):
                 arr = np.array(arr, dtype=np.float32)
                 lms_list.append(arr)
         lms = np.array(lms_list, dtype=np.int32)
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        xmin, ymin, xmax, ymax = expanded_square_crop_from_landmarks(
+            lms, img_ex.shape, expand_ratio=self.crop_expand_ratio
+        )
         crop_img = img_ex[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
         img_real_ex = crop_img[4:164, 4:164].copy()
