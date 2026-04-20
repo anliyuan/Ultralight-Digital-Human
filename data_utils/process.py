@@ -2,6 +2,7 @@ import os
 import cv2
 import argparse
 import numpy as np
+from landmark_io import save_landmarks_file
 
 def extract_audio(path, out_path, sample_rate=16000):
     
@@ -42,12 +43,12 @@ def get_audio_feature(wav_path, mode):
     if mode == "hubert":
         os.system("python hubert.py --wav "+wav_path)
     
-def get_landmark(path, landmarks_dir):
+def get_landmark(path, landmarks_dir, backend_name):
     print("detecting landmarks...")
     full_img_dir = path.replace(path.split("/")[-1], "full_body_img")
     
-    from get_landmark import Landmark
-    landmark = Landmark()
+    from get_landmark import create_landmark_backend
+    landmark = create_landmark_backend(backend_name)
     
     for img_name in os.listdir(full_img_dir):
         if not img_name.endswith(".jpg"):
@@ -55,19 +56,23 @@ def get_landmark(path, landmarks_dir):
         img_path = os.path.join(full_img_dir, img_name)
         lms_path = os.path.join(landmarks_dir, img_name.replace(".jpg", ".lms"))
         pre_landmark, x1, y1 = landmark.detect(img_path)
-        with open(lms_path, "w") as f:
-            for p in pre_landmark:
-                x, y = p[0]+x1, p[1]+y1
-                f.write(str(x))
-                f.write(" ")
-                f.write(str(y))
-                f.write("\n")
+        absolute_landmarks = np.array(
+            [[p[0] + x1, p[1] + y1] for p in pre_landmark], dtype=np.int32
+        )
+        save_landmarks_file(lms_path, absolute_landmarks, landmark.backend_name)
 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str, help="path to video file")
     parser.add_argument('--asr', type=str, default='hubert', help="wenet or hubert")
+    parser.add_argument(
+        '--landmark_backend',
+        type=str,
+        default='pfld',
+        choices=['pfld', 'mediapipe'],
+        help="landmark extraction backend",
+    )
     opt = parser.parse_args()
     asr_mode = opt.asr
 
@@ -79,7 +84,7 @@ if __name__ == "__main__":
     
     extract_audio(opt.path, wav_path)
     extract_images(opt.path, asr_mode)
-    get_landmark(opt.path, landmarks_dir)
+    get_landmark(opt.path, landmarks_dir, opt.landmark_backend)
     get_audio_feature(wav_path, asr_mode)
     
     

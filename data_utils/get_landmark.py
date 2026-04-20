@@ -1,5 +1,4 @@
 import argparse
-from os import wait3
 
 import numpy as np
 import cv2
@@ -8,6 +7,7 @@ import math
 import torch
 import torchvision
 from detect_face import SCRFD
+from landmark_io import LEGACY_BACKEND
 # from models.pfld_lite import PFLDInference
 # from models.pfld import PFLDInference
 from pfld_mobileone import PFLD_GhostOne as PFLDInference
@@ -67,7 +67,9 @@ def face_det(img, model):
         break
     return cropped_imgs, boxes_list, center_list, alpha_list
 
-class Landmark:
+class PFLDLandmarkBackend:
+    backend_name = LEGACY_BACKEND
+
     def __init__(self):
         
         with open('./mean_face.txt', 'r') as f_mean_face:
@@ -112,4 +114,50 @@ class Landmark:
         pre_landmark[:,1] *= h
         pre_landmark = pre_landmark.astype(np.int32)
         return pre_landmark, x1, y1
+
+
+class MediaPipeLandmarkBackend:
+    backend_name = "mediapipe478"
+
+    def __init__(self):
+        try:
+            import mediapipe as mp
+        except ImportError as exc:
+            raise ImportError(
+                "MediaPipe backend requires the 'mediapipe' package. "
+                "Install it before using --landmark_backend mediapipe."
+            ) from exc
+
+        self._face_mesh = mp.solutions.face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+
+    def detect(self, img_path):
+        img = cv2.imread(img_path)
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        result = self._face_mesh.process(rgb)
+        if not result.multi_face_landmarks:
+            raise ValueError(f"no face landmarks detected for {img_path}")
+        face_landmarks = result.multi_face_landmarks[0].landmark
+        height, width = img.shape[:2]
+        points = np.array(
+            [[landmark.x * width, landmark.y * height] for landmark in face_landmarks],
+            dtype=np.int32,
+        )
+        return points, 0, 0
+
+
+def create_landmark_backend(name):
+    if name == "pfld":
+        return PFLDLandmarkBackend()
+    if name == "mediapipe":
+        return MediaPipeLandmarkBackend()
+    raise ValueError(f"unsupported landmark backend: {name}")
+
+
+Landmark = PFLDLandmarkBackend
         

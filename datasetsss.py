@@ -7,6 +7,7 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from data_utils.landmark_io import crop_box_from_landmarks, load_landmarks_file
 
 class MyDataset(Dataset):
     
@@ -54,20 +55,8 @@ class MyDataset(Dataset):
     
     def process_img(self, img, lms_path, img_ex, lms_path_ex):
 
-        lms_list = []
-        with open(lms_path, "r") as f:
-            lines = f.read().splitlines()
-            for line in lines:
-                arr = line.split(" ")
-                arr = np.array(arr, dtype=np.float32)
-                lms_list.append(arr)
-        lms = np.array(lms_list, dtype=np.int32)  # 关键点坐标
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        backend_name, lms = load_landmarks_file(lms_path)
+        xmin, ymin, xmax, ymax = crop_box_from_landmarks(lms, backend_name)
         
         crop_img = img[ymin:ymax, xmin:xmax] # 将人脸下半部分区域裁切出来
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
@@ -77,20 +66,8 @@ class MyDataset(Dataset):
         img_masked = cv2.rectangle(img_real,(5,5,150,145),(0,0,0),-1) # 将图片中间区域涂黑
         
         # 取一张随机图像作为参考和要做推理的图像一起输入 ⬇️⬇️⬇️
-        lms_list = []
-        with open(lms_path_ex, "r") as f:
-            lines = f.read().splitlines()
-            for line in lines:
-                arr = line.split(" ")
-                arr = np.array(arr, dtype=np.float32)
-                lms_list.append(arr)
-        lms = np.array(lms_list, dtype=np.int32)
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        backend_name_ex, lms_ex = load_landmarks_file(lms_path_ex)
+        xmin, ymin, xmax, ymax = crop_box_from_landmarks(lms_ex, backend_name_ex)
         crop_img = img_ex[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
         img_real_ex = crop_img[4:164, 4:164].copy()

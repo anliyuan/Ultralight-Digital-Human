@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from data_utils.landmark_io import crop_box_from_landmarks, load_landmarks_file
 # from unet2 import Model
 # from unet_att import Model
 
@@ -75,20 +76,8 @@ for i in range(audio_feats.shape[0]):
     lms_path = lms_dir + str(img_idx)+'.lms'
     
     img = cv2.imread(img_path)
-    lms_list = []
-    with open(lms_path, "r") as f:
-        lines = f.read().splitlines()
-        for line in lines:
-            arr = line.split(" ")
-            arr = np.array(arr, dtype=np.float32)
-            lms_list.append(arr)
-    lms = np.array(lms_list, dtype=np.int32)  # 这个关键点检测模型之后之后可能会改掉
-    xmin = lms[1][0]
-    ymin = lms[52][1]
-
-    xmax = lms[31][0]
-    width = xmax - xmin
-    ymax = ymin + width
+    backend_name, lms = load_landmarks_file(lms_path)
+    xmin, ymin, xmax, ymax = crop_box_from_landmarks(lms, backend_name)
     crop_img = img[ymin:ymax, xmin:xmax]
     h, w = crop_img.shape[:2]
     crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)

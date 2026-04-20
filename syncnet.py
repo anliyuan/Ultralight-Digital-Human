@@ -8,6 +8,7 @@ import numpy as np
 from torch import optim
 import random
 import argparse
+from data_utils.landmark_io import crop_box_from_landmarks, load_landmarks_file
 
 
 
@@ -57,20 +58,8 @@ class Dataset(object):
     
     def process_img(self, img, lms_path, img_ex, lms_path_ex):
 
-        lms_list = []
-        with open(lms_path, "r") as f:
-            lines = f.read().splitlines()
-            for line in lines:
-                arr = line.split(" ")
-                arr = np.array(arr, dtype=np.float32)
-                lms_list.append(arr)
-        lms = np.array(lms_list, dtype=np.int32)
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        backend_name, lms = load_landmarks_file(lms_path)
+        xmin, ymin, xmax, ymax = crop_box_from_landmarks(lms, backend_name)
         
         crop_img = img[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)
