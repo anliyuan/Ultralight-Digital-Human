@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from datasetsss import MyDataset
 from syncnet import SyncNet_color
 from unet import Model
+from training_utils import build_train_dataloader
 import random
 import torchvision.models as models
 
@@ -81,7 +82,7 @@ def train(net, epoch, batch_size, lr):
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
         dataset = MyDataset(dataset_dir, args.asr)
-        train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
+        train_dataloader = build_train_dataloader(dataset, batch_size=batch_size)
         dataloader_list.append(train_dataloader)
         dataset_list.append(dataset)
     
