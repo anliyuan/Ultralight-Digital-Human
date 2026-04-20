@@ -7,6 +7,7 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from audio_windows import get_padded_audio_window
 
 class MyDataset(Dataset):
     
@@ -34,22 +35,7 @@ class MyDataset(Dataset):
         return self.audio_feats.shape[0] if self.audio_feats[0]<len(self.img_path_list) else len(self.img_path_list)
     
     def get_audio_features(self, features, index):  # 在当前音频帧前后各取4帧音频特征
-        left = index - 4
-        right = index + 4
-        pad_left = 0
-        pad_right = 0
-        if left < 0:
-            pad_left = -left
-            left = 0
-        if right > features.shape[0]:
-            pad_right = right - features.shape[0]
-            right = features.shape[0]
-        auds = torch.from_numpy(features[left:right])
-        if pad_left > 0:
-            auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
-        if pad_right > 0:
-            auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0) # [8, 16]
-        return auds
+        return get_padded_audio_window(features, index, left_context=4, right_context=4)
     
     
     def process_img(self, img, lms_path, img_ex, lms_path_ex):

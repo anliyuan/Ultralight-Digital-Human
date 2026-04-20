@@ -8,6 +8,7 @@ import numpy as np
 from torch import optim
 import random
 import argparse
+from audio_windows import get_padded_audio_window
 
 
 
@@ -37,23 +38,7 @@ class Dataset(object):
         return self.audio_feats.shape[0]-1
 
     def get_audio_features(self, features, index):
-        
-        left = index - 8
-        right = index + 8
-        pad_left = 0
-        pad_right = 0
-        if left < 0:
-            pad_left = -left
-            left = 0
-        if right > features.shape[0]:
-            pad_right = right - features.shape[0]
-            right = features.shape[0]
-        auds = torch.from_numpy(features[left:right])
-        if pad_left > 0:
-            auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
-        if pad_right > 0:
-            auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0) # [8, 16]
-        return auds
+        return get_padded_audio_window(features, index, left_context=8, right_context=8)
     
     def process_img(self, img, lms_path, img_ex, lms_path_ex):
 

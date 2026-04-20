@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from audio_windows import get_padded_audio_window
 # from unet2 import Model
 # from unet_att import Model
 
@@ -31,22 +32,7 @@ mode = args.asr
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def get_audio_features(features, index): # 这个逻辑跟datasets里面的逻辑相同
-    left = index - 4
-    right = index + 4
-    pad_left = 0
-    pad_right = 0
-    if left < 0:
-        pad_left = -left
-        left = 0
-    if right > features.shape[0]:
-        pad_right = right - features.shape[0]
-        right = features.shape[0]
-    auds = torch.from_numpy(features[left:right])
-    if pad_left > 0:
-        auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
-    if pad_right > 0:
-        auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0) # [8, 16]
-    return auds
+    return get_padded_audio_window(features, index, left_context=4, right_context=4)
 
 audio_feats = np.load(audio_feat_path)
 img_dir = os.path.join(dataset_dir, "full_body_img/")
