@@ -27,6 +27,14 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument(
+        '--reference_sampling_mode',
+        type=str,
+        default='random',
+        choices=['random', 'nearby'],
+    )
+    parser.add_argument('--reference_window', type=int, default=30)
+    parser.add_argument('--reference_min_offset', type=int, default=0)
 
     return parser.parse_args()
 
@@ -80,7 +88,13 @@ def train(net, epoch, batch_size, lr):
     dataset_list = []
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
-        dataset = MyDataset(dataset_dir, args.asr)
+        dataset = MyDataset(
+            dataset_dir,
+            args.asr,
+            reference_sampling_mode=args.reference_sampling_mode,
+            reference_window=args.reference_window,
+            reference_min_offset=args.reference_min_offset,
+        )
         train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
         dataloader_list.append(train_dataloader)
         dataset_list.append(dataset)

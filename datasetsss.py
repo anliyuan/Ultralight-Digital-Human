@@ -7,14 +7,25 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from reference_sampling import sample_reference_index
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(
+        self,
+        img_dir,
+        mode,
+        reference_sampling_mode="random",
+        reference_window=30,
+        reference_min_offset=0,
+    ):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.reference_sampling_mode = reference_sampling_mode
+        self.reference_window = reference_window
+        self.reference_min_offset = reference_min_offset
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -110,7 +121,13 @@ class MyDataset(Dataset):
         img = cv2.imread(self.img_path_list[idx])
         lms_path = self.lms_path_list[idx]
         
-        ex_int = random.randint(0, self.__len__()-1)
+        ex_int = sample_reference_index(
+            idx,
+            self.__len__(),
+            mode=self.reference_sampling_mode,
+            window=self.reference_window,
+            min_offset=self.reference_min_offset,
+        )
         img_ex = cv2.imread(self.img_path_list[ex_int])
         lms_path_ex = self.lms_path_list[ex_int]
         
