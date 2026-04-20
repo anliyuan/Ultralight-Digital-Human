@@ -12,6 +12,11 @@ from syncnet import SyncNet_color
 from unet import Model
 import random
 import torchvision.models as models
+from validation_utils import (
+    maybe_save_best_checkpoint,
+    should_run_validation,
+    split_train_val_dataset,
+)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -27,6 +32,9 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument('--val_split', type=float, default=0.1)
+    parser.add_argument('--eval_interval', type=int, default=5)
+    parser.add_argument('--seed', type=int, default=42)
 
     return parser.parse_args()
 
@@ -65,6 +73,29 @@ def cosine_loss(a, v, y):
 
     return loss
 
+
+def evaluate(net, dataloader, criterion, content_loss, syncnet=None):
+    net.eval()
+    total_loss = 0.0
+    total_samples = 0
+    with torch.no_grad():
+        for imgs, labels, audio_feat in dataloader:
+            imgs = imgs.to(device)
+            labels = labels.to(device)
+            audio_feat = audio_feat.to(device)
+            preds = net(imgs, audio_feat)
+            loss_perceptual = content_loss.get_loss(preds, labels)
+            loss_pixel = criterion(preds, labels)
+            loss = loss_pixel + loss_perceptual * 0.01
+            if syncnet is not None:
+                y = torch.ones([preds.shape[0], 1]).float().to(device)
+                a, v = syncnet(preds, audio_feat)
+                loss += 10 * cosine_loss(a, v, y)
+            batch_size = imgs.shape[0]
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
+    return total_loss / total_samples
+
 def train(net, epoch, batch_size, lr):
     content_loss = PerceptualLoss(torch.nn.MSELoss())
     if use_syncnet:
@@ -77,24 +108,32 @@ def train(net, epoch, batch_size, lr):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     dataloader_list = []
+    val_dataloader_list = []
     dataset_list = []
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
         dataset = MyDataset(dataset_dir, args.asr)
-        train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
+        train_dataset, val_dataset = split_train_val_dataset(dataset, args.val_split, args.seed)
+        train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
+        val_dataloader = None
+        if len(val_dataset) > 0:
+            val_dataloader = DataLoader(val_dataset, batch_size=16, shuffle=False, drop_last=False, num_workers=4)
         dataloader_list.append(train_dataloader)
+        val_dataloader_list.append(val_dataloader)
         dataset_list.append(dataset)
     
     optimizer = optim.Adam(net.parameters(), lr=lr)
     criterion = nn.L1Loss()
+    best_val_loss = float("inf")
     
     for e in range(epoch):
         net.train()
         random_i = random.randint(0, len(dataset_dir_list)-1)
         dataset = dataset_list[random_i]
         train_dataloader = dataloader_list[random_i]
+        val_dataloader = val_dataloader_list[random_i]
         
-        with tqdm(total=len(dataset), desc=f'Epoch {e + 1}/{epoch}', unit='img') as p:
+        with tqdm(total=len(train_dataloader.dataset), desc=f'Epoch {e + 1}/{epoch}', unit='img') as p:
             for batch in train_dataloader:
                 imgs, labels, audio_feat = batch
                 imgs = imgs.to(device)
@@ -119,6 +158,12 @@ def train(net, epoch, batch_size, lr):
                 
         if e % 5 == 0:
             torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
+        if val_dataloader is not None and should_run_validation(e, args.eval_interval):
+            val_loss = evaluate(net, val_dataloader, criterion, content_loss, syncnet if use_syncnet else None)
+            best_val_loss, _ = maybe_save_best_checkpoint(
+                net.state_dict(), save_dir, val_loss, best_val_loss
+            )
+            print(f"epoch {e + 1}: val_loss={val_loss:.6f}, best_val_loss={best_val_loss:.6f}")
         if args.see_res:
             net.eval()
             img_concat_T, img_real_T, audio_feat = dataset.__getitem__(random.randint(0, dataset.__len__()))
