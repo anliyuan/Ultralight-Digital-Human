@@ -8,6 +8,7 @@ import numpy as np
 from torch import optim
 import random
 import argparse
+from syncnet_training_utils import apply_training_step
 
 
 
@@ -233,8 +234,7 @@ def train(save_dir, dataset_dir, mode):
             y = y.cuda()
             audio_embedding, face_embedding = model(imgT, audioT)
             loss = cosine_loss(audio_embedding, face_embedding, y)
-            loss.backward()
-            optimizer.step()
+            apply_training_step(loss, optimizer)
         print(epoch, loss.item())
         torch.save(model.state_dict(), os.path.join(save_dir, str(epoch)+'.pth'))
             
