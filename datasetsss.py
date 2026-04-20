@@ -7,14 +7,25 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from audio_activity import is_low_activity
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(
+        self,
+        img_dir,
+        mode,
+        audio_activity_threshold=0.0,
+        audio_activity_policy="none",
+        max_activity_retries=8,
+    ):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.audio_activity_threshold = audio_activity_threshold
+        self.audio_activity_policy = audio_activity_policy
+        self.max_activity_retries = max_activity_retries
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -106,7 +117,7 @@ class MyDataset(Dataset):
 
         return img_concat_T, img_real_T
 
-    def __getitem__(self, idx):
+    def _load_sample(self, idx):
         img = cv2.imread(self.img_path_list[idx])
         lms_path = self.lms_path_list[idx]
         
@@ -123,5 +134,20 @@ class MyDataset(Dataset):
             audio_feat = audio_feat.reshape(16,32,32)  ## 这个地方的16 / 128跟合并起来的音频特征帧数有关
         
         return img_concat_T, img_real_T, audio_feat
+
+    def __getitem__(self, idx):
+        if self.audio_activity_policy == "none" or self.audio_activity_threshold == 0.0:
+            return self._load_sample(idx)
+
+        if self.audio_activity_policy != "resample":
+            raise ValueError(f"unsupported audio_activity_policy: {self.audio_activity_policy}")
+
+        last_index = idx
+        for _ in range(self.max_activity_retries):
+            if not is_low_activity(self.audio_feats[last_index], self.audio_activity_threshold):
+                return self._load_sample(last_index)
+            last_index = random.randint(0, self.__len__() - 1)
+
+        return self._load_sample(last_index)
     
         

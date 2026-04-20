@@ -27,6 +27,13 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument('--audio_activity_threshold', type=float, default=0.0)
+    parser.add_argument(
+        '--audio_activity_policy',
+        type=str,
+        default='none',
+        choices=['none', 'resample'],
+    )
 
     return parser.parse_args()
 
@@ -80,7 +87,12 @@ def train(net, epoch, batch_size, lr):
     dataset_list = []
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
-        dataset = MyDataset(dataset_dir, args.asr)
+        dataset = MyDataset(
+            dataset_dir,
+            args.asr,
+            audio_activity_threshold=args.audio_activity_threshold,
+            audio_activity_policy=args.audio_activity_policy,
+        )
         train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
         dataloader_list.append(train_dataloader)
         dataset_list.append(dataset)
