@@ -2,6 +2,7 @@ import os
 import cv2
 import argparse
 import numpy as np
+from landmark_smoothing import LandmarkSmoother
 
 def extract_audio(path, out_path, sample_rate=16000):
     
@@ -42,12 +43,13 @@ def get_audio_feature(wav_path, mode):
     if mode == "hubert":
         os.system("python hubert.py --wav "+wav_path)
     
-def get_landmark(path, landmarks_dir):
+def get_landmark(path, landmarks_dir, smoothing=False, smoothing_alpha=0.8):
     print("detecting landmarks...")
     full_img_dir = path.replace(path.split("/")[-1], "full_body_img")
     
     from get_landmark import Landmark
     landmark = Landmark()
+    smoother = LandmarkSmoother(alpha=smoothing_alpha) if smoothing else None
     
     for img_name in os.listdir(full_img_dir):
         if not img_name.endswith(".jpg"):
@@ -55,9 +57,13 @@ def get_landmark(path, landmarks_dir):
         img_path = os.path.join(full_img_dir, img_name)
         lms_path = os.path.join(landmarks_dir, img_name.replace(".jpg", ".lms"))
         pre_landmark, x1, y1 = landmark.detect(img_path)
+        absolute_landmarks = np.array(
+            [[p[0] + x1, p[1] + y1] for p in pre_landmark], dtype=np.int32
+        )
+        if smoother is not None:
+            absolute_landmarks = smoother.smooth(absolute_landmarks)
         with open(lms_path, "w") as f:
-            for p in pre_landmark:
-                x, y = p[0]+x1, p[1]+y1
+            for x, y in absolute_landmarks:
                 f.write(str(x))
                 f.write(" ")
                 f.write(str(y))
@@ -68,6 +74,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str, help="path to video file")
     parser.add_argument('--asr', type=str, default='hubert', help="wenet or hubert")
+    parser.add_argument(
+        '--landmark_smoothing',
+        action='store_true',
+        help="apply temporal smoothing to landmark coordinates during preprocessing",
+    )
+    parser.add_argument(
+        '--landmark_smoothing_alpha',
+        type=float,
+        default=0.8,
+        help="exponential smoothing factor when landmark smoothing is enabled",
+    )
     opt = parser.parse_args()
     asr_mode = opt.asr
 
@@ -79,7 +96,12 @@ if __name__ == "__main__":
     
     extract_audio(opt.path, wav_path)
     extract_images(opt.path, asr_mode)
-    get_landmark(opt.path, landmarks_dir)
+    get_landmark(
+        opt.path,
+        landmarks_dir,
+        smoothing=opt.landmark_smoothing,
+        smoothing_alpha=opt.landmark_smoothing_alpha,
+    )
     get_audio_feature(wav_path, asr_mode)
     
     
