@@ -7,14 +7,16 @@ import random
 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from crop_jitter import jitter_crop_box
 
 class MyDataset(Dataset):
     
-    def __init__(self, img_dir, mode):
+    def __init__(self, img_dir, mode, crop_jitter_ratio=0.0):
     
         self.img_path_list = []
         self.lms_path_list = []
         self.mode = mode  # wenet or hubert
+        self.crop_jitter_ratio = crop_jitter_ratio
         
         for i in range(len(os.listdir(img_dir+"/full_body_img/"))):
 
@@ -68,6 +70,9 @@ class MyDataset(Dataset):
         xmax = lms[31][0]
         width = xmax - xmin
         ymax = ymin + width
+        xmin, ymin, xmax, ymax = jitter_crop_box(
+            xmin, ymin, xmax, ymax, img.shape, jitter_ratio=self.crop_jitter_ratio
+        )
         
         crop_img = img[ymin:ymax, xmin:xmax] # 将人脸下半部分区域裁切出来
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
@@ -91,6 +96,9 @@ class MyDataset(Dataset):
         xmax = lms[31][0]
         width = xmax - xmin
         ymax = ymin + width
+        xmin, ymin, xmax, ymax = jitter_crop_box(
+            xmin, ymin, xmax, ymax, img_ex.shape, jitter_ratio=self.crop_jitter_ratio
+        )
         crop_img = img_ex[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA) 
         img_real_ex = crop_img[4:164, 4:164].copy()
