@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from prediction_smoothing import PredictionSmoother
 # from unet2 import Model
 # from unet_att import Model
 
@@ -20,6 +21,7 @@ parser.add_argument('--dataset', type=str, default="")
 parser.add_argument('--audio_feat', type=str, default="")
 parser.add_argument('--save_path', type=str, default="")     # end with .mp4 please
 parser.add_argument('--checkpoint', type=str, default="")
+parser.add_argument('--prediction_smoothing_alpha', type=float, default=0.0)
 args = parser.parse_args()
 
 checkpoint = args.checkpoint
@@ -65,6 +67,7 @@ img_idx = 0
 net = Model(6, mode).to(device)
 net.load_state_dict(torch.load(checkpoint, map_location=device))
 net.eval()
+smoother = PredictionSmoother(alpha=args.prediction_smoothing_alpha)
 for i in range(audio_feats.shape[0]):
     if img_idx>len_img - 1:
         step_stride = -1  # step_stride 决定取图片的间隔，目前这个逻辑是从头开始一张一张往后，到最后一张后再一张一张往前
@@ -118,6 +121,7 @@ for i in range(audio_feats.shape[0]):
         pred = net(img_concat_T, audio_feat)[0]
         
     pred = pred.cpu().numpy().transpose(1,2,0)*255
+    pred = smoother.smooth(pred)
     pred = np.array(pred, dtype=np.uint8)
     crop_img_ori[4:164, 4:164] = pred
     crop_img_ori = cv2.resize(crop_img_ori, (w, h))

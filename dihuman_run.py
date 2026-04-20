@@ -11,6 +11,7 @@ import logging
 import struct
 import argparse
 import kaldi_native_fbank as knf
+from prediction_smoothing import PredictionSmoother
 
 opts = knf.FbankOptions()
 opts.frame_opts.dither = 0
@@ -27,10 +28,11 @@ fbank = knf.OnlineFbank(opts)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, default="/data/service/", help="数据存放路径")
+parser.add_argument('--prediction_smoothing_alpha', type=float, default=0.0)
 arg = parser.parse_args()
 
 class DiHumanProcessor:
-    def __init__(self, data_path):
+    def __init__(self, data_path, prediction_smoothing_alpha=0.0):
         
         # 图片和关键点数据
         self.full_body_img_dir = os.path.join(data_path, "img_inference") # 图片路径
@@ -84,6 +86,7 @@ class DiHumanProcessor:
         self.silence = True
         
         self.using_feat = np.zeros([4,16,512], dtype=np.float32)
+        self.prediction_smoother = PredictionSmoother(alpha=prediction_smoothing_alpha)
         
     def reset(self):
         
@@ -185,6 +188,7 @@ class DiHumanProcessor:
 
                 pred = ort_outs[0][0]
                 pred = pred.transpose(1,2,0)*255
+                pred = self.prediction_smoother.smooth(pred)
                 pred = pred.astype(np.uint8)
 
                 crop_img_ori[4:164, 4:164] = pred
@@ -240,7 +244,10 @@ if __name__ =="__main__":
     stream = stream.astype(np.int16)
     video_writer = cv2.VideoWriter("./test_video.mp4", cv2.VideoWriter_fourcc('M','J','P', 'G'), 20, (1280, 720))
     audio_data = []
-    processor = DiHumanProcessor("./dataset_kanghui_wenet/111/") # 初始化
+    processor = DiHumanProcessor(
+        "./dataset_kanghui_wenet/111/",
+        prediction_smoothing_alpha=arg.prediction_smoothing_alpha,
+    ) # 初始化
     audio_stream_len = stream.shape[0]
     empty_audio = np.zeros([160])
     
