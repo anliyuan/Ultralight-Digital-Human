@@ -11,6 +11,7 @@ import logging
 import struct
 import argparse
 import kaldi_native_fbank as knf
+from data_utils.crop_utils import square_crop_from_landmarks
 
 opts = knf.FbankOptions()
 opts.frame_opts.dither = 0
@@ -50,11 +51,7 @@ class DiHumanProcessor:
                     arr = np.array(arr, dtype=np.float32)
                     lms_list.append(arr)
             lms = np.array(lms_list, dtype=np.int32)
-            xmin = lms[1][0]
-            ymin = lms[52][1]
-            xmax = lms[31][0]
-            width = xmax - xmin
-            ymax = ymin + width
+            xmin, ymin, xmax, ymax = square_crop_from_landmarks(lms, full_body_img.shape)
             bbox = [xmin, ymin, xmax, ymax]
             self.bbox_list.append(bbox)
 

@@ -8,6 +8,7 @@ import numpy as np
 from torch import optim
 import random
 import argparse
+from data_utils.crop_utils import square_crop_from_landmarks
 
 
 
@@ -65,12 +66,7 @@ class Dataset(object):
                 arr = np.array(arr, dtype=np.float32)
                 lms_list.append(arr)
         lms = np.array(lms_list, dtype=np.int32)
-        xmin = lms[1][0]
-        ymin = lms[52][1]
-        
-        xmax = lms[31][0]
-        width = xmax - xmin
-        ymax = ymin + width
+        xmin, ymin, xmax, ymax = square_crop_from_landmarks(lms, img.shape)
         
         crop_img = img[ymin:ymax, xmin:xmax]
         crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)
