@@ -8,14 +8,16 @@ import numpy as np
 from torch import optim
 import random
 import argparse
+from syncnet_pair_sampling import sample_syncnet_audio_index
 
 
 
 class Dataset(object):
-    def __init__(self, dataset_dir, mode):
+    def __init__(self, dataset_dir, mode, negative_pair_prob=0.0):
         
         self.img_path_list = []
         self.lms_path_list = []
+        self.negative_pair_prob = negative_pair_prob
         
         for i in range(len(os.listdir(dataset_dir+"/full_body_img/"))):
 
@@ -90,13 +92,18 @@ class Dataset(object):
         lms_path_ex = self.lms_path_list[ex_int]
         
         img_real_T = self.process_img(img, lms_path, img_ex, lms_path_ex)
-        audio_feat = self.get_audio_features(self.audio_feats, idx) # 
+        audio_idx, label = sample_syncnet_audio_index(
+            idx,
+            self.__len__(),
+            negative_pair_prob=self.negative_pair_prob,
+        )
+        audio_feat = self.get_audio_features(self.audio_feats, audio_idx) # 
         # print(audio_feat.shape)
         if self.mode=="wenet":
             audio_feat = audio_feat.reshape(256,16,32)
         if self.mode=="hubert":
             audio_feat = audio_feat.reshape(32,32,32)
-        y = torch.ones(1).float()
+        y = torch.tensor([label], dtype=torch.float32)
         
         return img_real_T, audio_feat, y
 
@@ -214,11 +221,11 @@ def cosine_loss(a, v, y):
 
     return loss
     
-def train(save_dir, dataset_dir, mode):
+def train(save_dir, dataset_dir, mode, negative_pair_prob):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
         
-    train_dataset = Dataset(dataset_dir, mode=mode)
+    train_dataset = Dataset(dataset_dir, mode=mode, negative_pair_prob=negative_pair_prob)
     train_data_loader = DataLoader(
         train_dataset, batch_size=16, shuffle=True,
         num_workers=4)
@@ -247,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_dir', type=str)
     parser.add_argument('--dataset_dir', type=str)
     parser.add_argument('--asr', type=str)
+    parser.add_argument('--negative_pair_prob', type=float, default=0.0)
     opt = parser.parse_args()
     
     # syncnet = SyncNet_color(mode=opt.asr)
@@ -255,4 +263,4 @@ if __name__ == "__main__":
     # audio = torch.zeros([1,16,32,32])
     # audio_embedding, face_embedding = syncnet(img, audio)
     # print(audio_embedding.shape, face_embedding.shape)
-    train(opt.save_dir, opt.dataset_dir, opt.asr)
+    train(opt.save_dir, opt.dataset_dir, opt.asr, opt.negative_pair_prob)
