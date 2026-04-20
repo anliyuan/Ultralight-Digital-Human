@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from datasetsss import MyDataset
 from syncnet import SyncNet_color
 from unet import Model
+from train_loss_config import combine_training_losses
 import random
 import torchvision.models as models
 
@@ -27,6 +28,8 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument('--perceptual_loss_weight', type=float, default=0.01)
+    parser.add_argument('--syncnet_loss_weight', type=float, default=10.0)
 
     return parser.parse_args()
 
@@ -108,9 +111,19 @@ def train(net, epoch, batch_size, lr):
                 loss_PerceptualLoss = content_loss.get_loss(preds, labels)
                 loss_pixel = criterion(preds, labels)
                 if use_syncnet:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01 + 10*sync_loss
+                    loss = combine_training_losses(
+                        loss_pixel,
+                        loss_PerceptualLoss,
+                        perceptual_weight=args.perceptual_loss_weight,
+                        sync_loss=sync_loss,
+                        syncnet_weight=args.syncnet_loss_weight,
+                    )
                 else:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01
+                    loss = combine_training_losses(
+                        loss_pixel,
+                        loss_PerceptualLoss,
+                        perceptual_weight=args.perceptual_loss_weight,
+                    )
                 p.set_postfix(**{'loss (batch)': loss.item()})
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
