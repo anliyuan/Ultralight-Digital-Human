@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from datasetsss import MyDataset
 from syncnet import SyncNet_color
 from unet import Model
+from syncnet_warmup import syncnet_weight_for_epoch
 import random
 import torchvision.models as models
 
@@ -27,6 +28,7 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument('--syncnet_warmup_epochs', type=int, default=0)
 
     return parser.parse_args()
 
@@ -108,7 +110,10 @@ def train(net, epoch, batch_size, lr):
                 loss_PerceptualLoss = content_loss.get_loss(preds, labels)
                 loss_pixel = criterion(preds, labels)
                 if use_syncnet:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01 + 10*sync_loss
+                    sync_weight = syncnet_weight_for_epoch(
+                        e, base_weight=10.0, warmup_epochs=args.syncnet_warmup_epochs
+                    )
+                    loss = loss_pixel + loss_PerceptualLoss*0.01 + sync_weight*sync_loss
                 else:
                     loss = loss_pixel + loss_PerceptualLoss*0.01
                 p.set_postfix(**{'loss (batch)': loss.item()})
