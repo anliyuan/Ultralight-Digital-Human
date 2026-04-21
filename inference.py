@@ -8,6 +8,7 @@ from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from unet import Model
+from compositing import composite_prediction
 # from unet2 import Model
 # from unet_att import Model
 
@@ -20,6 +21,13 @@ parser.add_argument('--dataset', type=str, default="")
 parser.add_argument('--audio_feat', type=str, default="")
 parser.add_argument('--save_path', type=str, default="")     # end with .mp4 please
 parser.add_argument('--checkpoint', type=str, default="")
+parser.add_argument(
+    '--composite_mode',
+    type=str,
+    default='hard_crop',
+    choices=['hard_crop', 'feathered_crop'],
+)
+parser.add_argument('--composite_feather', type=int, default=12)
 args = parser.parse_args()
 
 checkpoint = args.checkpoint
@@ -119,9 +127,14 @@ for i in range(audio_feats.shape[0]):
         
     pred = pred.cpu().numpy().transpose(1,2,0)*255
     pred = np.array(pred, dtype=np.uint8)
-    crop_img_ori[4:164, 4:164] = pred
-    crop_img_ori = cv2.resize(crop_img_ori, (w, h))
-    img[ymin:ymax, xmin:xmax] = crop_img_ori
+    img = composite_prediction(
+        img,
+        crop_img_ori,
+        pred,
+        (xmin, ymin, xmax, ymax),
+        mode=args.composite_mode,
+        feather=args.composite_feather,
+    )
     video_writer.write(img)
 video_writer.release()
 

@@ -11,6 +11,7 @@ import logging
 import struct
 import argparse
 import kaldi_native_fbank as knf
+from compositing import composite_prediction
 
 opts = knf.FbankOptions()
 opts.frame_opts.dither = 0
@@ -27,6 +28,13 @@ fbank = knf.OnlineFbank(opts)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', type=str, default="/data/service/", help="数据存放路径")
+parser.add_argument(
+    '--composite_mode',
+    type=str,
+    default='hard_crop',
+    choices=['hard_crop', 'feathered_crop'],
+)
+parser.add_argument('--composite_feather', type=int, default=12)
 arg = parser.parse_args()
 
 class DiHumanProcessor:
@@ -187,9 +195,14 @@ class DiHumanProcessor:
                 pred = pred.transpose(1,2,0)*255
                 pred = pred.astype(np.uint8)
 
-                crop_img_ori[4:164, 4:164] = pred
-                crop_img_ori = cv2.resize(crop_img_ori, (w, h))
-                img[ymin:ymax, xmin:xmax] = crop_img_ori
+                img = composite_prediction(
+                    img,
+                    crop_img_ori,
+                    pred,
+                    (xmin, ymin, xmax, ymax),
+                    mode=arg.composite_mode,
+                    feather=arg.composite_feather,
+                )
                 self.using_feat = self.using_feat[1:]
                 
                 
