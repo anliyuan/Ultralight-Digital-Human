@@ -1,11 +1,49 @@
-.ipynb_checkpoints
-dataset
+# macOS
+.DS_Store
+__MACOSX/
+.DS_Store
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Logs and local runtime files
+*.log
+*.pid
+*.tmp
+*.temp
+
+# Training / preprocessing datasets and generated assets
+dataset/
+data_dir/
+*/full_body_img/
+*/landmarks/
+*/img_inference/
+*/lms_inference/
+*.lms
 *.wav
+*.pcm
 *.npy
-__pycache__
+*.npz
 *.mp4
-checkpoint
-syncnet_checkpoint
 *.jpg
+
+# Model checkpoints and exported weights
+checkpoint/
+checkpoint*/
+syncnet_ckpt/
+syncnet_checkpoint/
+*.ckpt
+*.pt
+*.pth
+*.pth.tar
+*.onnx
+
+# Downloaded local model files
 data_utils/encoder.onnx
-__MACOSX

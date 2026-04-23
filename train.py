@@ -1,5 +1,8 @@
 import argparse
 import os
+
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
 import cv2
 import torch
 import numpy as np
@@ -13,7 +16,16 @@ from unet import Model
 import random
 import torchvision.models as models
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def get_best_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+device = get_best_device()
+print(f"[INFO] Training device: {device}")
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train',
@@ -27,6 +39,8 @@ def get_args():
     parser.add_argument('--batchsize', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--asr', type=str, default="hubert")
+    parser.add_argument('--sync_loss_weight', type=float, default=2.0,
+                        help="syncnet loss weight when --use_syncnet is enabled.")
 
     return parser.parse_args()
 
@@ -34,18 +48,25 @@ args = get_args()
 use_syncnet = args.use_syncnet
 # Loss functions
 class PerceptualLoss():
-    
+
     def contentFunc(self):
         conv_3_3_layer = 14
-        cnn = models.vgg19(pretrained=True).features
+        try:
+            cnn = models.vgg19(weights=models.VGG19_Weights.DEFAULT).features
+        except Exception as exc:
+            print(f"[WARN] Failed to download VGG19 weights ({exc}); "
+                  f"falling back to untrained VGG19 for perceptual loss.")
+            cnn = models.vgg19(weights=None).features
         cnn = cnn.to(device)
         model = nn.Sequential()
         model = model.to(device)
-        for i,layer in enumerate(list(cnn)):
-            model.add_module(str(i),layer)
+        for i, layer in enumerate(list(cnn)):
+            model.add_module(str(i), layer)
             if i == conv_3_3_layer:
                 break
-        return model
+        for p in model.parameters():
+            p.requires_grad = False
+        return model.eval()
 
     def __init__(self, loss):
         self.criterion = loss
@@ -58,12 +79,8 @@ class PerceptualLoss():
         loss = self.criterion(f_fake, f_real_no_grad)
         return loss
 
-logloss = nn.BCELoss()
 def cosine_loss(a, v, y):
-    d = nn.functional.cosine_similarity(a, v)
-    loss = logloss(d.unsqueeze(1), y)
-
-    return loss
+    return nn.CosineEmbeddingLoss(margin=0.2)(a, v, y.view(-1))
 
 def train(net, epoch, batch_size, lr):
     content_loss = PerceptualLoss(torch.nn.MSELoss())
@@ -72,7 +89,9 @@ def train(net, epoch, batch_size, lr):
             raise ValueError("Using syncnet, you need to set 'syncnet_checkpoint'.Please check README")
             
         syncnet = SyncNet_color(args.asr).eval().to(device)
-        syncnet.load_state_dict(torch.load(args.syncnet_checkpoint))
+        syncnet.load_state_dict(torch.load(args.syncnet_checkpoint, map_location=device))
+        for param in syncnet.parameters():
+            param.requires_grad = False
     save_dir= args.save_dir
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
@@ -80,37 +99,50 @@ def train(net, epoch, batch_size, lr):
     dataset_list = []
     dataset_dir_list = [args.dataset_dir]
     for dataset_dir in dataset_dir_list:
-        dataset = MyDataset(dataset_dir, args.asr)
+        dataset = MyDataset(dataset_dir, args.asr, use_syncnet=use_syncnet)
         train_dataloader = DataLoader(dataset, batch_size=16, shuffle=True, drop_last=False, num_workers=4)
         dataloader_list.append(train_dataloader)
         dataset_list.append(dataset)
-    
+
     optimizer = optim.Adam(net.parameters(), lr=lr)
     criterion = nn.L1Loss()
-    
+
     for e in range(epoch):
         net.train()
         random_i = random.randint(0, len(dataset_dir_list)-1)
         dataset = dataset_list[random_i]
         train_dataloader = dataloader_list[random_i]
-        
+
         with tqdm(total=len(dataset), desc=f'Epoch {e + 1}/{epoch}', unit='img') as p:
             for batch in train_dataloader:
-                imgs, labels, audio_feat = batch
+                if use_syncnet:
+                    imgs, labels, audio_feat, sync_concats, sync_audios = batch
+                    sync_concats = sync_concats.to(device)
+                    sync_audios = sync_audios.to(device)
+                else:
+                    imgs, labels, audio_feat = batch
                 imgs = imgs.to(device)
                 labels = labels.to(device)
                 audio_feat = audio_feat.to(device)
                 preds = net(imgs, audio_feat)
-                if use_syncnet:
-                    y = torch.ones([preds.shape[0],1]).float().to(device)
-                    a, v = syncnet(preds, audio_feat)
-                    sync_loss = cosine_loss(a, v, y)
+
                 loss_PerceptualLoss = content_loss.get_loss(preds, labels)
                 loss_pixel = criterion(preds, labels)
+
                 if use_syncnet:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01 + 10*sync_loss
+                    B, S = sync_concats.shape[0], sync_concats.shape[1]
+                    flat_concats = sync_concats.reshape(B * S, *sync_concats.shape[2:])
+                    flat_audios = sync_audios.reshape(B * S, *sync_audios.shape[2:])
+                    flat_sync_preds = net(flat_concats, flat_audios)
+                    seq_preds = flat_sync_preds.reshape(
+                        B, S * flat_sync_preds.shape[1], flat_sync_preds.shape[2], flat_sync_preds.shape[3]
+                    )
+                    y = torch.ones([B, 1]).float().to(device)
+                    a, v = syncnet(seq_preds, audio_feat)
+                    sync_loss = cosine_loss(a, v, y)
+                    loss = loss_pixel + loss_PerceptualLoss * 0.01 + args.sync_loss_weight * sync_loss
                 else:
-                    loss = loss_pixel + loss_PerceptualLoss*0.01
+                    loss = loss_pixel + loss_PerceptualLoss * 0.01
                 p.set_postfix(**{'loss (batch)': loss.item()})
                 optimizer.zero_grad(set_to_none=True)
                 loss.backward()
@@ -121,7 +153,8 @@ def train(net, epoch, batch_size, lr):
             torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
         if args.see_res:
             net.eval()
-            img_concat_T, img_real_T, audio_feat = dataset.__getitem__(random.randint(0, dataset.__len__()))
+            sample = dataset.__getitem__(random.randint(0, dataset.__len__()))
+            img_concat_T, img_real_T, audio_feat = sample[0], sample[1], sample[2]
             img_concat_T = img_concat_T[None].to(device)
             audio_feat = audio_feat[None].to(device)
             with torch.no_grad():

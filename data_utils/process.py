@@ -1,29 +1,50 @@
 import os
+import sys
+import subprocess
+from pathlib import Path
 import cv2
 import argparse
 import numpy as np
 
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def run_command(cmd):
+    print(f"[INFO] Running command: {' '.join(cmd)}")
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Command not found: {cmd[0]}") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"Command failed with exit code {exc.returncode}: {' '.join(cmd)}") from exc
+
+
+def validate_fps(fps, mode):
+    expected_fps = {"hubert": 25.0, "wenet": 20.0}.get(mode)
+    if expected_fps is None:
+        raise ValueError(f"Unsupported ASR mode: {mode}")
+    if fps <= 0:
+        raise ValueError(f"Failed to read video fps for mode {mode}.")
+    if abs(fps - expected_fps) > 0.5:
+        raise ValueError(f"Using {mode}, your video fps should be close to {expected_fps}, but got {fps:.3f}.")
+
 def extract_audio(path, out_path, sample_rate=16000):
     
     print(f'[INFO] ===== extract audio from {path} to {out_path} =====')
-    cmd = f'ffmpeg -i {path} -f wav -ar {sample_rate} {out_path}'
-    os.system(cmd)
+    run_command(['ffmpeg', '-y', '-i', path, '-f', 'wav', '-ar', str(sample_rate), out_path])
     print(f'[INFO] ===== extracted audio =====')
     
 def extract_images(path, mode):
     
     
     full_body_dir = path.replace(path.split("/")[-1], "full_body_img")
-    if not os.path.exists(full_body_dir):
-        os.mkdir(full_body_dir)
+    os.makedirs(full_body_dir, exist_ok=True)
     
     counter = 0
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS)
-    if mode == "hubert" and fps != 25:
-        raise ValueError("Using hubert,your video fps should be 25!!!")
-    if mode == "wenet" and fps != 20:
-        raise ValueError("Using wenet,your video fps should be 20!!!")
+    validate_fps(fps, mode)
         
     print("extracting images...")
     while True:
@@ -32,15 +53,18 @@ def extract_images(path, mode):
             break
         cv2.imwrite(full_body_dir+"/"+str(counter)+'.jpg', frame)
         counter += 1
+    cap.release()
         
 def get_audio_feature(wav_path, mode):
     
     print("extracting audio feature...")
     
     if mode == "wenet":
-        os.system("python wenet_infer.py "+wav_path)
-    if mode == "hubert":
-        os.system("python hubert.py --wav "+wav_path)
+        run_command([sys.executable, str(BASE_DIR / "wenet_infer.py"), wav_path])
+    elif mode == "hubert":
+        run_command([sys.executable, str(BASE_DIR / "hubert.py"), '--wav', wav_path])
+    else:
+        raise ValueError(f"Unsupported ASR mode: {mode}")
     
 def get_landmark(path, landmarks_dir):
     print("detecting landmarks...")
@@ -54,7 +78,11 @@ def get_landmark(path, landmarks_dir):
             continue
         img_path = os.path.join(full_img_dir, img_name)
         lms_path = os.path.join(landmarks_dir, img_name.replace(".jpg", ".lms"))
-        pre_landmark, x1, y1 = landmark.detect(img_path)
+        det_result = landmark.detect(img_path)
+        if det_result is None:
+            print(f"[WARN] Skip landmark generation for {img_name} because face detection failed.")
+            continue
+        pre_landmark, x1, y1 = det_result
         with open(lms_path, "w") as f:
             for p in pre_landmark:
                 x, y = p[0]+x1, p[1]+y1

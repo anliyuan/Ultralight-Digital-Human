@@ -1,5 +1,6 @@
 import argparse
 from os import wait3
+from pathlib import Path
 
 import numpy as np
 import cv2
@@ -11,6 +12,19 @@ from detect_face import SCRFD
 # from models.pfld_lite import PFLDInference
 # from models.pfld import PFLDInference
 from pfld_mobileone import PFLD_GhostOne as PFLDInference
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def get_best_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def face_det(img, model):
 
     cropped_imgs = []
@@ -69,24 +83,32 @@ def face_det(img, model):
 
 class Landmark:
     def __init__(self):
+        self.device = get_best_device()
         
-        with open('./mean_face.txt', 'r') as f_mean_face:
+        with open(BASE_DIR / 'mean_face.txt', 'r') as f_mean_face:
             mean_face = f_mean_face.read()
         self.mean_face = np.asarray(mean_face.split(' '), dtype=np.float32)
-        self.det_net = SCRFD('./scrfd_2.5g_kps.onnx', confThreshold=0.1, nmsThreshold=0.5)
+        self.det_net = SCRFD(str(BASE_DIR / 'scrfd_2.5g_kps.onnx'), confThreshold=0.1, nmsThreshold=0.5)
 
-        checkpoint = torch.load('./checkpoint_epoch_335.pth.tar')
-        self.pfld_backbone = PFLDInference().cuda()
+        checkpoint = torch.load(BASE_DIR / 'checkpoint_epoch_335.pth.tar', map_location=self.device)
+        self.pfld_backbone = PFLDInference().to(self.device)
         self.pfld_backbone.load_state_dict(checkpoint['pfld_backbone'])
         self.pfld_backbone.eval()
+        print(f"[INFO] Landmark model device: {self.device}")
 
     def detect(self, img_path):
         
         img = cv2.imread(img_path)
+        if img is None:
+            print(f"[WARN] Failed to read image: {img_path}")
+            return None
         img_ori = img.copy()
 
         h,w = img_ori.shape[:2]
         cropped_imgs, boxes_list, center_list, alpha_list = face_det(img, self.det_net)
+        if not cropped_imgs or not boxes_list:
+            print(f"[WARN] No face detected in frame: {img_path}")
+            return None
         cropped = cropped_imgs[0]
         # cv2.imshow("cropped", cropped)
         h,w = cropped.shape[:2]
@@ -97,7 +119,7 @@ class Landmark:
         input = np.asarray(input, dtype=np.float32) / 255.0
         input = input.transpose(2,0,1)
         input = torch.from_numpy(input)[None]
-        input = input.cuda()
+        input = input.to(self.device)
         # print(input)
         # asd
 

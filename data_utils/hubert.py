@@ -3,6 +3,14 @@ import soundfile as sf
 import numpy as np
 import torch
 
+
+def get_best_device():
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
 print("Loading the Wav2Vec2 Processor...")
 wav2vec2_processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
 print("Loading the HuBERT Model...")
@@ -14,8 +22,10 @@ def get_hubert_from_16k_wav(wav_16k_name):
     return hubert
 
 @torch.no_grad()
-def get_hubert_from_16k_speech(speech, device="cuda:0"):
+def get_hubert_from_16k_speech(speech, device=None):
     global hubert_model
+    if device is None:
+        device = get_best_device()
     hubert_model = hubert_model.to(device)
     if speech.ndim ==2:
         speech = speech[:, 0] # [T, 2] ==> [T,]
