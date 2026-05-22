@@ -48,11 +48,11 @@ I tried many setups with SyncNet auxiliary loss; in practice it barely helps vis
 
 1. **Non-personalized digital human** — Unlike this repo (train a dedicated model per person from their video), I'm exploring a **non-personal** talking-head: one model not bound to a single identity, without per-user fine-tuning on a specific face. Still in progress; not quite there yet.
 
-2. **Ultra-light streaming variant (coming soon)** — I redesigned the audio encoder and image codec; **audio + UNet under ~1M parameters**, faster inference, plus streaming tricks I added for smoother on-device playback. **I will open-source this branch.**
+2. **Ultra-light streaming variant (coming soon)** — I redesigned the audio encoder and image codec; **combined audio + UNet model size under ~1M**, faster inference, plus streaming tricks I added for smoother on-device playback. **I will open-source this branch.**
 
 1. **非个性化数字人** — 与本仓库「每人一段视频、训一个专属模型」的 **personal** 路线不同，我在探索**非个性化**方案：模型不绑定某一个具体人物，无需为每个人单独训练一套权重。还在打磨，离可用还有一段距离。
 
-2. **超轻量流式版本（即将开源）** — 我重新设计了音频编码器与图像编解码结构，**audio + UNet 参数量控制在 1M 以内**，推理更快；流式推理里我也加了一些 trick，移动端更顺滑。**这个版本已经有一些成果了，我会将该版本单独开源。**
+2. **超轻量流式版本（即将开源）** — 我重新设计了音频编码器与图像编解码结构，**audio + UNet 两个模型的总体积控制在 1M 以内**，推理更快；流式推理里我也加了一些 trick，移动端更顺滑。**这个版本已经有一些成果了，我会将该版本单独开源。**
 
 3. **Video generation — looking for advice / 视频生成（欢迎交流）** — I've been working on video generation lately. If you have hands-on experience, I'd love to hear from you. Two pain points right now: **(1) temporal smoothness** — outputs often feel uneven (speeding up and slowing down, sometimes frame drops); **(2) very long videos** — when I split generation into many segments, end-to-end quality is hard to control. Open an issue or email me at **anqi_a@yeah.net**.
 
