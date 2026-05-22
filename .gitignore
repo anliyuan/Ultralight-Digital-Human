@@ -5,7 +5,9 @@ dataset
 __pycache__
 *.mp4
 checkpoint
-syncnet_checkpoint
 *.jpg
 data_utils/encoder.onnx
 __MACOSX
+.DS_Store
+**/.DS_Store
+train_tmp_img/

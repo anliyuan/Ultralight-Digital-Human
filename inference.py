@@ -1,128 +1,184 @@
+"""离线推理：给定一段音频特征和数据集目录，逐帧合成数字人视频。"""
+
+from __future__ import annotations
+
 import argparse
 import os
+import shutil
+import subprocess
+from typing import Optional
+
 import cv2
-import torch
 import numpy as np
-import torch.nn as nn
-from torch import optim
-from tqdm import tqdm
-from torch.utils.data import DataLoader
+import torch
+
+from face_utils import (
+    FACE_BORDER,
+    FACE_CROP_SIZE,
+    FACE_INNER_SIZE,
+    compute_face_bbox,
+    crop_face,
+    extract_inner,
+    gather_audio_window,
+    hwc_to_chw_tensor,
+    mask_mouth,
+    read_landmarks,
+    reshape_audio_feat,
+)
 from unet import Model
-# from unet2 import Model
-# from unet_att import Model
 
-import time
-parser = argparse.ArgumentParser(description='Train',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('--asr', type=str, default="hubert")
-parser.add_argument('--dataset', type=str, default="")  
-parser.add_argument('--audio_feat', type=str, default="")
-parser.add_argument('--save_path', type=str, default="")     # end with .mp4 please
-parser.add_argument('--checkpoint', type=str, default="")
-args = parser.parse_args()
+FPS_BY_MODE = {"hubert": 25, "wenet": 20}
 
-checkpoint = args.checkpoint
-save_path = args.save_path
-dataset_dir = args.dataset
-audio_feat_path = args.audio_feat
-mode = args.asr
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Inference',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument('--asr', type=str, default="hubert", choices=["wenet", "hubert"])
+    parser.add_argument('--dataset', type=str, required=True)
+    parser.add_argument('--audio_feat', type=str, required=True)
+    parser.add_argument('--save_path', type=str, required=True,
+                        help="output video path (.mp4 / .avi)")
+    parser.add_argument('--checkpoint', type=str, required=True)
+    parser.add_argument('--audio_wav', type=str, default="",
+                        help="if provided, ffmpeg will merge audio into the final video")
+    return parser.parse_args()
 
-def get_audio_features(features, index): # 这个逻辑跟datasets里面的逻辑相同
-    left = index - 4
-    right = index + 4
-    pad_left = 0
-    pad_right = 0
-    if left < 0:
-        pad_left = -left
-        left = 0
-    if right > features.shape[0]:
-        pad_right = right - features.shape[0]
-        right = features.shape[0]
-    auds = torch.from_numpy(features[left:right])
-    if pad_left > 0:
-        auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
-    if pad_right > 0:
-        auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0) # [8, 16]
-    return auds
 
-audio_feats = np.load(audio_feat_path)
-img_dir = os.path.join(dataset_dir, "full_body_img/")
-lms_dir = os.path.join(dataset_dir, "landmarks/")
-len_img = len(os.listdir(img_dir)) - 1
-exm_img = cv2.imread(img_dir+"0.jpg")
-h, w = exm_img.shape[:2]
+def select_fourcc(save_path: str) -> int:
+    """根据输出文件扩展名选择合适的视频编码器。"""
+    ext = os.path.splitext(save_path)[1].lower()
+    if ext == ".avi":
+        return cv2.VideoWriter_fourcc("M", "J", "P", "G")
+    return cv2.VideoWriter_fourcc(*"mp4v")  # 默认 mp4v，兼容性比 MJPG 好
 
-if mode=="hubert":
-    video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M','J','P', 'G'), 25, (w, h))
-if mode=="wenet":
-    video_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc('M','J','P', 'G'), 20, (w, h))
-step_stride = 0
-img_idx = 0
 
-net = Model(6, mode).to(device)
-net.load_state_dict(torch.load(checkpoint, map_location=device))
-net.eval()
-for i in range(audio_feats.shape[0]):
-    if img_idx>len_img - 1:
-        step_stride = -1  # step_stride 决定取图片的间隔，目前这个逻辑是从头开始一张一张往后，到最后一张后再一张一张往前
-    if img_idx<1:
-        step_stride = 1
-    img_idx += step_stride
-    img_path = img_dir + str(img_idx)+'.jpg'
-    lms_path = lms_dir + str(img_idx)+'.lms'
-    
-    img = cv2.imread(img_path)
-    lms_list = []
-    with open(lms_path, "r") as f:
-        lines = f.read().splitlines()
-        for line in lines:
-            arr = line.split(" ")
-            arr = np.array(arr, dtype=np.float32)
-            lms_list.append(arr)
-    lms = np.array(lms_list, dtype=np.int32)  # 这个关键点检测模型之后之后可能会改掉
-    xmin = lms[1][0]
-    ymin = lms[52][1]
+def load_model(checkpoint_path: str, mode: str, device: torch.device) -> Model:
+    net = Model(6, mode).to(device)
+    ckpt = torch.load(checkpoint_path, map_location=device)
+    state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+    net.load_state_dict(state_dict)
+    net.eval()
+    return net
 
-    xmax = lms[31][0]
-    width = xmax - xmin
-    ymax = ymin + width
-    crop_img = img[ymin:ymax, xmin:xmax]
-    h, w = crop_img.shape[:2]
-    crop_img = cv2.resize(crop_img, (168, 168), cv2.INTER_AREA)
-    crop_img_ori = crop_img.copy()
-    img_real_ex = crop_img[4:164, 4:164].copy()
-    img_real_ex_ori = img_real_ex.copy()
-    img_masked = cv2.rectangle(img_real_ex_ori,(5,5,150,145),(0,0,0),-1)
-    
-    img_masked = img_masked.transpose(2,0,1).astype(np.float32)
-    img_real_ex = img_real_ex.transpose(2,0,1).astype(np.float32)
-    
-    img_real_ex_T = torch.from_numpy(img_real_ex / 255.0).to(device)
-    img_masked_T = torch.from_numpy(img_masked / 255.0).to(device)  
-    img_concat_T = torch.cat([img_real_ex_T, img_masked_T], axis=0)[None]
-    # 这个地方逻辑和dataset里面完全一样，只是不需要另外取一张参考图 而是用要推理的这张图片即可
-    
-    audio_feat = get_audio_features(audio_feats, i)
-    if mode=="hubert":
-        audio_feat = audio_feat.reshape(16,32,32)
-    if mode=="wenet":
-        audio_feat = audio_feat.reshape(128,16,32)
-    audio_feat = audio_feat[None]
-    audio_feat = audio_feat.to(device)
-    img_concat_T = img_concat_T.to(device)
-    
+
+def merge_audio(video_path: str, audio_path: str, output_path: str) -> bool:
+    if not shutil.which("ffmpeg"):
+        print("[warn] ffmpeg not found in PATH, skip audio merging.")
+        return False
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-i", audio_path,
+        "-c:v", "libx264",
+        "-c:a", "aac",
+        "-shortest",
+        output_path,
+    ]
+    print("[info] running:", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+    return True
+
+
+class _FramePicker:
+    """按照 0,1,2,...,N-1,N-2,...,1,0,1,... 的来回顺序无限取帧。"""
+
+    def __init__(self, n_frames: int):
+        assert n_frames >= 2, "需要至少 2 帧才能来回播放"
+        self.n_frames = n_frames
+        self.idx = 0
+        self.step = 0  # 第一次 next() 时进入 step=1
+
+    def next(self) -> int:
+        if self.idx >= self.n_frames - 1:
+            self.step = -1
+        if self.idx <= 0:
+            self.step = 1
+        self.idx += self.step
+        return self.idx
+
+
+def _prepare_unet_input(
+    img: np.ndarray, lms_path: str, device: torch.device,
+):
+    """返回 (img_concat_T, crop_img_ori, bbox, original_size)。"""
+    bbox = compute_face_bbox(read_landmarks(lms_path))
+    crop_h, crop_w = img[bbox[1]:bbox[3], bbox[0]:bbox[2]].shape[:2]
+
+    face_crop = crop_face(img, bbox)
+    face_crop_ori = face_crop.copy()
+    inner = extract_inner(face_crop)
+
+    # 推理时 reference 用当前帧自己（与训练存在轻微 mismatch，但作者原始设计如此）
+    ref_T = hwc_to_chw_tensor(inner.copy()).to(device)
+    masked_T = hwc_to_chw_tensor(mask_mouth(inner)).to(device)
+    img_concat_T = torch.cat([ref_T, masked_T], dim=0)[None]
+
+    return img_concat_T, face_crop_ori, bbox, (crop_w, crop_h)
+
+
+def _paste_back(
+    img: np.ndarray,
+    pred_inner: np.ndarray,
+    face_crop_ori: np.ndarray,
+    bbox: tuple,
+    original_size: tuple,
+):
+    """把网络预测的 inner 区域贴回原 face crop，再 resize 回原 bbox 大小，覆写 img。"""
+    face_crop_ori[FACE_BORDER:FACE_BORDER + FACE_INNER_SIZE,
+                  FACE_BORDER:FACE_BORDER + FACE_INNER_SIZE] = pred_inner
+    crop_w, crop_h = original_size
+    face_crop_ori = cv2.resize(face_crop_ori, (crop_w, crop_h))
+    xmin, ymin, xmax, ymax = bbox
+    img[ymin:ymax, xmin:xmax] = face_crop_ori
+
+
+def run(args, device: Optional[torch.device] = None):
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    audio_feats = np.load(args.audio_feat)
+    img_dir = os.path.join(args.dataset, "full_body_img")
+    lms_dir = os.path.join(args.dataset, "landmarks")
+    n_imgs = sum(1 for f in os.listdir(img_dir) if f.endswith(".jpg"))
+    exm_img = cv2.imread(os.path.join(img_dir, "0.jpg"))
+    h, w = exm_img.shape[:2]
+
+    fps = FPS_BY_MODE[args.asr]
+    writer = cv2.VideoWriter(args.save_path, select_fourcc(args.save_path), fps, (w, h))
+
+    net = load_model(args.checkpoint, args.asr, device)
+    picker = _FramePicker(n_imgs)
+
     with torch.no_grad():
-        pred = net(img_concat_T, audio_feat)[0]
-        
-    pred = pred.cpu().numpy().transpose(1,2,0)*255
-    pred = np.array(pred, dtype=np.uint8)
-    crop_img_ori[4:164, 4:164] = pred
-    crop_img_ori = cv2.resize(crop_img_ori, (w, h))
-    img[ymin:ymax, xmin:xmax] = crop_img_ori
-    video_writer.write(img)
-video_writer.release()
+        for i in range(audio_feats.shape[0]):
+            img_idx = picker.next()
+            img = cv2.imread(os.path.join(img_dir, f"{img_idx}.jpg"))
+            lms_path = os.path.join(lms_dir, f"{img_idx}.lms")
 
-# ffmpeg -i test_video.mp4 -i test_audio.pcm -c:v libx264 -c:a aac result_test.mp4
+            img_concat_T, face_crop_ori, bbox, original_size = _prepare_unet_input(
+                img, lms_path, device,
+            )
+
+            audio_feat = gather_audio_window(audio_feats, i)
+            audio_feat = reshape_audio_feat(audio_feat, args.asr)[None].to(device)
+
+            pred = net(img_concat_T, audio_feat)[0]
+            pred = (pred.cpu().numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+
+            _paste_back(img, pred, face_crop_ori, bbox, original_size)
+            writer.write(img)
+    writer.release()
+
+    if args.audio_wav:
+        base, ext = os.path.splitext(args.save_path)
+        merged_path = base + "_with_audio" + (ext if ext else ".mp4")
+        merge_audio(args.save_path, args.audio_wav, merged_path)
+        print(f"[done] video with audio saved to {merged_path}")
+    else:
+        print(f"[done] video (no audio) saved to {args.save_path}")
+
+
+if __name__ == "__main__":
+    run(parse_args())

@@ -30,6 +30,34 @@ Lets see the demo.⬇️⬇️⬇️
 
 因为一般用到流式推理的场景一般对实时性要求比较高，所以这里我只写了wenet作为音频编码器的情况（实测在2080这样的机器上多个并发时每帧音频处理+视频处理耗时10ms以内，需要将模型转为onnx）。并且根据每个人的使用场景不同，重构代码是必须的，所以我没有做太多的代码优化，这里只提供一些思路给大家参考，如果需要用到hubert作为音频编码器，可以参考其他github的项目。至于C++的推理方法。我大致试了一下，当前方法在ios近两年的设备上实时跑是没什么问题的，大家可以根据dihuman_run.py里的逻辑做翻译，我这里现在有一种能让这个模型跑在更多设备上的方法（效率更高，略微牺牲效果），有人在商用，暂时不做开源。如果大家在使用过程中发现什么问题，请提issue，我会尽力维护这个项目。
 
+## Updates / 项目近况
+
+**Code maintenance / 代码维护**
+
+The earlier codebase had several bugs. After going through open issues, I fixed a number of problems and refactored and optimized the project together with **cc**. Thanks to everyone who reported problems.
+
+早期版本里确实存在一些 bug。近期我对照 issue 做了修复，并与 **cc** 一起整理了代码，感谢各位在 issue 里的反馈。
+
+**SyncNet removed / 移除 SyncNet**
+
+I tried many setups with SyncNet auxiliary loss; in practice it barely helps visual quality or lip-sync in this pipeline (aligned with earlier community feedback). I removed SyncNet-related code and docs to keep the repo simpler.
+
+我做过大量 SyncNet 相关实验，在本项目里它对最终观感与口型同步的提升非常有限（与此前 issue 里的讨论一致），因此我已移除全部 SyncNet 相关代码与文档，训练流程更干净。
+
+**What I'm working on / 我近期的方向**
+
+1. **Non-personalized digital human** — Unlike this repo (train a dedicated model per person from their video), I'm exploring a **non-personal** talking-head: one model not bound to a single identity, without per-user fine-tuning on a specific face. Still in progress; not quite there yet.
+
+2. **Ultra-light streaming variant (coming soon)** — I redesigned the audio encoder and image codec; **audio + UNet under ~1M parameters**, faster inference, plus streaming tricks I added for smoother on-device playback. **I will open-source this branch.**
+
+1. **非个性化数字人** — 与本仓库「每人一段视频、训一个专属模型」的 **personal** 路线不同，我在探索**非个性化**方案：模型不绑定某一个具体人物，无需为每个人单独训练一套权重。还在打磨，离可用还有一段距离。
+
+2. **超轻量流式版本（即将开源）** — 我重新设计了音频编码器与图像编解码结构，**audio + UNet 参数量控制在 1M 以内**，推理更快；流式推理里我也加了一些 trick，移动端更顺滑。**这个版本已经有一些成果了，我会将该版本单独开源。**
+
+3. **Video generation — looking for advice / 视频生成（欢迎交流）** — I've been working on video generation lately. If you have hands-on experience, I'd love to hear from you. Two pain points right now: **(1) temporal smoothness** — outputs often feel uneven (speeding up and slowing down, sometimes frame drops); **(2) very long videos** — when I split generation into many segments, end-to-end quality is hard to control. Open an issue or email me at **anqi_a@yeah.net**.
+
+3. **视频生成（欢迎交流）** — 我最近在做视频生成相关工作，有相关经验的朋友欢迎指点。目前比较困扰我的有两点：**（1）流畅度** — 生成的视频常会忽快忽慢，甚至出现跳帧；**（2）超长视频** — 分成若干片段生成时，整体质量往往很难把控。**（3）很多其他问题，我一时想不起来了**欢迎在 [issue](https://github.com/anliyuan/Ultralight-Digital-Human/issues) 留言，或发邮件至 **anqi_a@yeah.net**。
+
 ## Train
 
 It's so easy to train your own digital human.I will show you step by step.
@@ -65,11 +93,11 @@ Prepare your video, 3~5min is good. Make sure that every frame of the video has 
 
 准备好你的视频，3到5分钟的就可以，必须保证视频中每一帧都有整张脸露出来的人物，声音清晰没有杂音，把它放到一个新的文件夹里面。我会提供一个demo视频，来自康辉老师的口播，侵删。
 
-First of all, we need to extract audio feature.I'm using 2 different extractor from wenet and hubert, thank them for their great work.
+First, extract the audio features. I'm using 2 different extractors from wenet and hubert, thank them for their great work.
 
 wenet的代码和与训练模型来自:https://github.com/Tzenthin/wenet_mnn
 
-首先我们需要提取音频特征，我用了两个不同的特征提取起，分别是wenet和hubert，感谢他们。
+首先要提取音频特征，我用了两个不同的特征提取器，分别是 wenet 和 hubert，感谢他们。
 
 When you using wenet, you neet to ensure that your video frame rate is 20, and for hubert,your video frame rate should be 25.
 
@@ -98,25 +126,9 @@ After the preprocessing step, you can start training the model.
 
 上面步骤结束后，就可以开始训练模型了。
 
-Train a syncnet first for better results.
-
-先训练一个syncnet，效果会更好。
-
 ``` bash
 cd ..
-python syncnet.py --save_dir ./syncnet_ckpt/ --dataset_dir ./data_dir/ --asr hubert
-```
-
-Then find a best one（low loss） to train digital human model.
-
-然后找一个loss最低的checkpoint来训练数字人模型。
-
-2025.6.4更新
-关于syncnet，看到很多issue里面大家提syncnet写的不对。因为这个项目也没有很明确的指标，在生产中，加不加syncnet对结果影响并不大，视觉上不会看出来什么差异的（在我的大量实验中是这样的）。或者说有没有同学可以提供一个更好的syncnet方法？欢迎PR。
-
-``` bash
-cd ..
-python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert --use_syncnet --syncnet_checkpoint syncnet_ckpt
+python train.py --dataset_dir ./data_dir/ --save_dir ./checkpoint/ --asr hubert
 ```
 
 ## inference
@@ -159,11 +171,4 @@ if you have some advice, open an issue or PR.
 If you think this repo is useful to you, please give me a star.
 
 如果你觉的这个repo对你有用的话，记得给我点个star
-
-微信群⬇️⬇️⬇️
-<table>
-  <tr>
-    <td><img src="demo/wechat.jpeg" width="180"/></td>
-  </tr>
-</table>
 
