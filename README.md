@@ -1,23 +1,5 @@
 # Ultralight Digital Human
 
-<p align="center">
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
-    <a href=""><img src="https://img.shields.io/badge/python-3.10-aff.svg"></a>
-    <a href="https://github.com/anliyuan/Ultralight-Digital-Human/stargazers"><img src="https://img.shields.io/github/stars/anliyuan/Ultralight-Digital-Human?color=ccf"></a>
-  <br>
-    <br>
-</p>
-
-A Ultralight Digital Human model can run on mobile devices in real time!!!
-
-一个能在移动设备上实时运行的数字人模型,据我所知，这应该是第一个开源的如此轻量级的数字人模型。
-
-Lets see the demo.⬇️⬇️⬇️
-
-先来看个demo⬇️⬇️⬇️
-
-![DigitalHuman](https://github.com/user-attachments/assets/9d0b37ee-2076-4b4f-93ba-eb939a9fb427)
-
 ## New Project: FeatherTalk / 新项目：FeatherTalk
 
 If you want a newer and more deployment-friendly version of this project, please check out
@@ -44,6 +26,24 @@ Main improvements:
 - **MobileOne 风格 UNet**：支持更面向部署的 UNet 结构，并支持重参数化 ONNX 导出。
 - **更稳定的嘴部效果**：新增嘴部 ROI loss 和连续帧 temporal mouth loss，用来缓解嘴部抖动。
 - **更清晰的流程**：整理了训练和推理脚本，提供预览 demo，并提供可下载的 demo 训练包和训练好的 FeatherHuBERT checkpoint。
+
+<p align="center">
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/python-3.10-aff.svg"></a>
+    <a href="https://github.com/anliyuan/Ultralight-Digital-Human/stargazers"><img src="https://img.shields.io/github/stars/anliyuan/Ultralight-Digital-Human?color=ccf"></a>
+  <br>
+    <br>
+</p>
+
+A Ultralight Digital Human model can run on mobile devices in real time!!!
+
+一个能在移动设备上实时运行的数字人模型,据我所知，这应该是第一个开源的如此轻量级的数字人模型。
+
+Lets see the demo.⬇️⬇️⬇️
+
+先来看个demo⬇️⬇️⬇️
+
+![DigitalHuman](https://github.com/user-attachments/assets/9d0b37ee-2076-4b4f-93ba-eb939a9fb427)
 
 ## 如果你视频中声音质量比较差的话，效果大概率不会好。声音质量比较差指的是：1）存在难以忽略的噪声。2）在空旷的房间里录制的视频有回音。3）视频人声不清楚。建议录制视频时候使用外接麦克风，不用拍摄设备自带的麦克风。我自己尝试了声音清晰的情况，不论是wenet还是hubert，效果都非常棒。
 
