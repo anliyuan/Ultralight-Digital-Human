@@ -31,7 +31,8 @@ deployment.
 Main improvements:
 
 - **FeatherHuBERT**: a small HuBERT-compatible waveform audio encoder. It keeps the same input and
-  output feature shape as HuBERT, but is much lighter on the audio side.
+  output feature shape as HuBERT, while reducing audio-side compute by about **40x** compared with
+  HuBERT Large. Actual speedup depends on hardware and runtime.
 - **MobileOne-style UNet**: supports a deployment-oriented UNet variant and reparameterized ONNX export.
 - **Better mouth stability**: adds mouth ROI loss and adjacent-frame temporal mouth loss to reduce jitter.
 - **Cleaner workflow**: includes clearer training/inference scripts, a preview demo, and a downloadable
@@ -39,7 +40,7 @@ Main improvements:
 
 主要改进：
 
-- **FeatherHuBERT**：小型 HuBERT 兼容 waveform 音频编码器，保持和 HuBERT 相同的输入与输出特征形状，但音频侧计算量更低。
+- **FeatherHuBERT**：小型 HuBERT 兼容 waveform 音频编码器，保持和 HuBERT 相同的输入与输出特征形状；相比 HuBERT Large，音频侧计算量约降低 **40 倍**，实际速度提升会随硬件和推理后端变化。
 - **MobileOne 风格 UNet**：支持更面向部署的 UNet 结构，并支持重参数化 ONNX 导出。
 - **更稳定的嘴部效果**：新增嘴部 ROI loss 和连续帧 temporal mouth loss，用来缓解嘴部抖动。
 - **更清晰的流程**：整理了训练和推理脚本，提供预览 demo，并提供可下载的 demo 训练包和训练好的 FeatherHuBERT checkpoint。
