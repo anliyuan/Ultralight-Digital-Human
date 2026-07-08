@@ -18,6 +18,32 @@ Lets see the demo.⬇️⬇️⬇️
 
 ![DigitalHuman](https://github.com/user-attachments/assets/9d0b37ee-2076-4b4f-93ba-eb939a9fb427)
 
+## New Project: FeatherTalk / 新项目：FeatherTalk
+
+If you want a newer and more deployment-friendly version of this project, please check out
+[FeatherTalk](https://github.com/anliyuan/FeatherTalk). It is a cleaned-up successor to
+Ultralight Digital Human, focused on a lighter audio encoder, easier training, and mobile-friendly
+deployment.
+
+如果你想尝试这个项目的新版和更适合部署的版本，可以看看
+[FeatherTalk](https://github.com/anliyuan/FeatherTalk)。它是 Ultralight Digital Human 的整理和升级版，重点优化了音频编码器、训练流程和移动端部署体验。
+
+Main improvements:
+
+- **FeatherHuBERT**: a small HuBERT-compatible waveform audio encoder. It keeps the same input and
+  output feature shape as HuBERT, but is much lighter on the audio side.
+- **MobileOne-style UNet**: supports a deployment-oriented UNet variant and reparameterized ONNX export.
+- **Better mouth stability**: adds mouth ROI loss and adjacent-frame temporal mouth loss to reduce jitter.
+- **Cleaner workflow**: includes clearer training/inference scripts, a preview demo, and a downloadable
+  demo training package with a trained FeatherHuBERT checkpoint.
+
+主要改进：
+
+- **FeatherHuBERT**：小型 HuBERT 兼容 waveform 音频编码器，保持和 HuBERT 相同的输入与输出特征形状，但音频侧计算量更低。
+- **MobileOne 风格 UNet**：支持更面向部署的 UNet 结构，并支持重参数化 ONNX 导出。
+- **更稳定的嘴部效果**：新增嘴部 ROI loss 和连续帧 temporal mouth loss，用来缓解嘴部抖动。
+- **更清晰的流程**：整理了训练和推理脚本，提供预览 demo，并提供可下载的 demo 训练包和训练好的 FeatherHuBERT checkpoint。
+
 ## 如果你视频中声音质量比较差的话，效果大概率不会好。声音质量比较差指的是：1）存在难以忽略的噪声。2）在空旷的房间里录制的视频有回音。3）视频人声不清楚。建议录制视频时候使用外接麦克风，不用拍摄设备自带的麦克风。我自己尝试了声音清晰的情况，不论是wenet还是hubert，效果都非常棒。
 
 ## 关于流式推理：
@@ -171,4 +197,3 @@ if you have some advice, open an issue or PR.
 If you think this repo is useful to you, please give me a star.
 
 如果你觉的这个repo对你有用的话，记得给我点个star
-
