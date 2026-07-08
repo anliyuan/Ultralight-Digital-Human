@@ -27,6 +27,10 @@ Main improvements:
 - **更稳定的嘴部效果**：新增嘴部 ROI loss 和连续帧 temporal mouth loss，用来缓解嘴部抖动。
 - **更清晰的流程**：整理了训练和推理脚本，提供预览 demo，并提供可下载的 demo 训练包和训练好的 FeatherHuBERT checkpoint。
 
+---
+
+## Ultralight Digital Human 
+
 <p align="center">
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/python-3.10-aff.svg"></a>
