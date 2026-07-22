@@ -2,6 +2,8 @@
 
 ## New Project: FeatherTalk / 新项目：FeatherTalk
 
+## c++流式推理代码已开源到[FeatherTalk](https://github.com/anliyuan/FeatherTalk)🎉🎉🎉🎉🎉🎉🎉🎉🎉欢迎大家试用、star、issue
+
 If you want a newer and more deployment-friendly version of this project, please check out
 [FeatherTalk](https://github.com/anliyuan/FeatherTalk). It is a cleaned-up successor to
 Ultralight Digital Human, focused on a lighter audio encoder, easier training, and mobile-friendly
